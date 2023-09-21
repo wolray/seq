@@ -13,7 +13,7 @@
 <dependency>
     <groupId>io.github.wolray</groupId>
     <artifactId>seq</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
 </dependency>
 ```
 
@@ -205,15 +205,25 @@ todo
 ### 流的分组
 todo
 
+## 其他特性
+
+### 惰性有向图与并发递归计算
+见文章：[面向上下文(Context)编程：一种带缓存、可并发、惰性递归的编程范式，源码可画图](https://mp.weixin.qq.com/s/lxpoXcH7fGF1_n8iI96d4A)
+
+本项目提供了上文的一种实现。
+
+### 流的缓存
+当需要对流进行缓存或者collect时，传统做法是使用`ArrayList`或者`LinkedList`。然而前者需要不时拷贝内部数组，后者每个元素内存成本高，更好的方式是将二者结合，使用扩容后的新数组存放新元素，但不进行数组拷贝，而是直接将新旧数组链接起来。从而既缓存了元素，也实现了内存和性能的双优化。
+
+该实现称之为`BatchedSeq`，已发布，并将应用于各种需要对流进行缓存的场景，包括暂未发布的并发流。
+
+
 ## todo
 由于内容过多，仍有许多功能尚未实现，暂列于后文。
 
 #### 更好的groupby
 
 #### Lazy惰性图计算节点
-
-#### BatchedSeq与流的缓存
-当需要对流进行缓存或者collect时，传统做法是使用`ArrayList`或者`LinkedList`。然而前者需要不时拷贝内部数组，后者每个元素内存成本高，更好的方式是将二者结合，使用扩容后的新数组存放新元素，但不进行数组拷贝，而是直接将新旧数组直接link起来。从而既缓存了元素，也实现了内存和性能的双优化。
 
 #### 二元流/多元流
 基于callback机制的二元流，是其独特的衍生特性。二元流最大的优势是不产生任何tuple或pair之类的中间数据结构，即用即走，十分优雅。
@@ -235,3 +245,7 @@ Java的`String`提供了默认的`split`实现，但它会将substring收集为�
 
 ## 反馈
 可使用中文直接提issue，也可添加微信radiumlei2010进群，原作者也在群里，方便他与大家沟通，收集反馈。
+
+## 发布记录
+#### 1.0.1 (20230922)
+新增`IntSeq`, `Lazy`, `BatchedSeq`, `SeqSet`, `windowed`, `timeWindowed`
