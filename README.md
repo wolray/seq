@@ -124,7 +124,7 @@ default <E> Seq<E> mapMaybe(Function<T, E> function) {...}
 // 映射后过滤非空元素
 default <E> Seq<E> mapNotNull(Function<T, E> function) {...}
 ```
-#### filter 元素过滤
+#### 元素过滤 filter
 ```Java
 default Seq<T> filter(Predicate<T> predicate) {...}
 // 以及只在前n项里过滤
@@ -148,17 +148,17 @@ default Seq<T> filterNotIn(Map<T, ?> map) {...}
 default Seq<T> filterNotNull() {...}
 ```
 
-#### flatMap 展平流
+#### 展平流 flatMap
 可以认为是Seq Monad
 ```Java
 default <E> Seq<E> flatMap(Function<T, Seq<E>> function) {...}
 ```
-#### flatOptional 按Optional展平
+#### 按Optional展平 flatOptional
 ```Java
 default <E> Seq<E> flatOptional(Function<T, Optional<E>> function) {..
 ```
 
-#### peek元素onEach
+#### 处理元素 onEach
 处理但不消费
 ```Java
 default Seq<T> onEach(Consumer<T> consumer) {...}
@@ -168,28 +168,30 @@ default Seq<T> onEach(int n, Consumer<T> consumer) {...}
 default Seq<T> onEachIndexed(IndexObjConsumer<T> consumer) {...}
 ```
 
-#### 流的部分消费partial
+#### 流的部分消费 partial
 只按照指定方式消费前n项，后面元素保留
 ```Java
 default Seq<T> partial(int n, Consumer<T> substitute) {...}
 ```
 
-#### 翻转流reverse
+#### 翻转流 reverse
 ```Java
 default ArraySeq<T> reverse() {...}
 ```
 
-#### 累加流runningFold
+#### 累加流 runningFold
 ```Java
 default <E> Seq<E> runningFold(E init, BiFunction<E, T, E> function) {...}
 ```
-### 流的局部聚合
-#### 每n个元素分为一组chunked
+### 流的窗口函数
+所谓窗口函数就是对流的元素按照某种规则进行局部聚合，每一个小组聚合为整体后，构成一个新的流。
+聚合的逻辑通常有三种，按次数，按时间，按头尾元素特征。
+#### 每n个元素分为一组 chunked
 ```Java
 // (1, 1, 2, 2, 2, 3, 4, 4, 5) -> n=3 -> ([1, 1, 2], [2, 2, 3], [4, 4, 5])
 default Seq<ArraySeq<T>> chunked(int size) {...}
 ```
-#### 按条件局部分组mapSub
+#### 按条件局部分组 mapSub
 ```Java
 // (1, 1, 2, 2, 2, 3, 4, 4, 5) -> isEven -> ([2, 2, 2], [4, 4])
 default Seq<ArraySeq<T>> mapSub(Predicate<T> takeWhile) {...}
@@ -198,6 +200,12 @@ default <V> Seq<V> mapSub(Predicate<T> takeWhile, Reducer<T, V> reducer) {...}
 // (1, 1, 2, 2, 2, 3, 4, 4, 5) -> (isOdd, isEven, toList) -> ([1, 1, 2], [3, 4])
 default <V> Seq<V> mapSub(Predicate<T> first, Predicate<T> last, Reducer<T, V> reducer) {
 ```
+#### 滑动窗口 windowed
+todo
+
+#### 按时间开窗 windowedByTime
+需要热流和异步流发布后才能完全发挥价值
+todo
 
 ### 流的聚合
 todo
@@ -218,12 +226,10 @@ todo
 该实现称之为`BatchedSeq`，已发布，并将应用于各种需要对流进行缓存的场景，包括暂未发布的并发流。
 
 
-## todo
+## todo特性
 由于内容过多，仍有许多功能尚未实现，暂列于后文。
 
 #### 更好的groupby
-
-#### Lazy惰性图计算节点
 
 #### 二元流/多元流
 基于callback机制的二元流，是其独特的衍生特性。二元流最大的优势是不产生任何tuple或pair之类的中间数据结构，即用即走，十分优雅。
