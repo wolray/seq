@@ -19,7 +19,7 @@
 
 ## 完备的流式API
 ### 流的定义与种类
-#### 一元流
+#### 普通流（一元流）
 ```Java
 public interface Seq<T> {
     void consume(Consumer<T> consumer);
@@ -28,6 +28,7 @@ public interface Seq<T> {
 #### 可迭代流ItrSeq
 它既是`Iterable`，也是`Seq`，并提供一个额外的默认`zip`方法
 ```Java
+// (1, 2, 3, 4) -> zip(0) -> (1, 0, 2, 0, 3, 0, 4, 0)
 public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
     default ItrSeq<T> zip(T t) {...}
 }
@@ -36,8 +37,11 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
 它直接继承自`ItrSeq`，同时提供`size`和`isEmpty`方法，以及默认的`isNotEmpty`方法
 ```Java
 public interface SizedSeq<T> extends ItrSeq<T> {
+    // (1, 2, 3, 4) -> size() -> 4
     int size();
+    // (1, 2, 3, 4) -> isEmpty() -> false
     boolean isEmpty();
+    // (1, 2, 3, 4) -> isNotEmpty() -> true
     default boolean isNotEmpty() {...}
 }
 ```
@@ -45,6 +49,7 @@ public interface SizedSeq<T> extends ItrSeq<T> {
 它直接继承自`ArrayList`，自带它的全部方法和功能，同时也是个`SizedSeq`，该Class是对`ArrayList`的强大扩展，还可以在此基础上追加一些额外方法，例如`swap`
 ```Java
 public class ArraySeq<T> extends ArrayList<T> implements SizedSeq<T> {
+    // (1, 2, 3, 4) -> swap(1, 2) -> (1, 3, 2, 4)
     public void swap(int i, int j) {...}
 }
 ```
@@ -56,10 +61,11 @@ public class LinkedSeq<T> extends LinkedList<T> implements SizedSeq<T> {...}
 ### 流的创建
 #### 基于生成器表达式
 ```Java
+// {code block} -> (0, 1, 2, 3, 4, 5, ...)
 Seq<Integer> seq = c -> {
     c.accept(0);
     int i = 1;
-    for (; i < 10; i++) {
+    for (; i < 4; i++) {
         c.accept(i);
     }
     // 这是一个无限流
@@ -68,143 +74,217 @@ Seq<Integer> seq = c -> {
     }
 };
 ```
+
 #### 单位流
 ```Java
+// unit(1) -> (1)
 static <T> Seq<T> unit(T t) {...}
 ```
+
 #### 基于Iterable
 ```Java
+// of([1, 2, 3, 4]) -> (1, 2, 3, 4)
 static <T> Seq<T> of(Iterable<T> iterable) {...}
 ```
+
 #### 基于可变参数
 ```Java
+// of(1, 2, 3, 4) -> (1, 2, 3, 4)
 static <T> Seq<T> of(T... ts) {...}
 ```
+
 #### 基于Supplier
 ```Java
+// gen(() -> 1) -> (1, 1, 1, ...)
 static <T> ItrSeq<T> gen(Supplier<T> supplier) {...}
+// gen(() -> 1 or null) -> (1, 1, 1)
 static <T> ItrSeq<T> tillNull(Supplier<T> supplier) {...}
 ```
+
 #### 基于Optional
 ```Java
+// of(Optional.of(1)) -> (1)
 static <T> Seq<T> of(Optional<T> optional) {...}
 ```
+
 #### 基于正则匹配
 ```Java
+// match("abc123foo456bar789", Pattern.compile("[0-9]+")) -> ("123", "456", "789")
+// match("abc123foo456bar789", Pattern.compile("[a-z]+")) -> ("abc", "foo", "bar")
 static ItrSeq<Matcher> match(String s, Pattern pattern) {...}
 ```
+也可以指定正则匹配的分组
+```Java
+// match("abc123foo456bar789", Pattern.compile("([0-9]+)[0-9]"), 1) -> ("12", "45", "78")
+static ItrSeq<Matcher> match(String s, Pattern pattern, int group) {...}
+```
+
 #### 基于树
+按照深度优先的顺序依次遍历节点
 ```Java
 static <N> Seq<N> ofTree(N node, Function<N, Seq<N>> sub) {...}
 // 对分支深度做限制，可用于树搜索算法
 static <N> Seq<N> ofTree(int maxDepth, N node, Function<N, Seq<N>> sub) {...}
 ```
 #### 基于JSONObject
+按照深度优先的顺序依次遍历内部成员以及成员的成员
 ```Java
 static Seq<Object> ofJson(Object node) {...}
 ```
 #### 基于元素重复
 ```Java
+// repeat(4, "x") -> ("x", "x", "x", "x")
 static <T> ItrSeq<T> repeat(int n, T t) {...}
 ```
 ### 流的链式调用
 链式调用是流的核心功能，它由一个流触发，返回一个新的流，中间可对数据进行映射、过滤、排序等等各种操作
+
 #### map 流的映射
 ```Java
+// (1, 2, 3, 4) -> map(i -> i + 10) -> (11, 12, 13, 14)
 default <E> Seq<E> map(Function<T, E> function) {...}
+
+// 带下标映射
+// (1, 2, 3, 4) -> mapIndexed((index, i) -> index % 2 == 0 ? i : i + 10) -> (11, 2, 13, 4)
+default <E> Seq<E> mapIndexed(IndexObjFunction<T, E> function) {...}
 ```
 其他映射方式
 ```Java
 // 分段映射，前n项使用substitute，其他使用function
+// (1, 2, 3, 4) -> map(i -> i + 10, 2, i -> i + 100) -> (101, 102, 13, 14)
 default <E> Seq<E> map(Function<T, E> function, int n, Function<T, E> substitute) {...}
-// 带下标映射
-default <E> Seq<E> mapIndexed(IndexObjFunction<T, E> function) {...}
+
 // 仅对非空元素映射
+// (1, 2, null, 4) -> mapMaybe(i -> i + 10) -> (10, 20, 40)
 default <E> Seq<E> mapMaybe(Function<T, E> function) {...}
+
 // 映射后过滤非空元素
+// (1, 2, 3, 4) -> mapNotNull(i -> i % 2 == 0 ? null : i + 10) -> (10, 30)
+// 等价于 map(function).filterNotNull()
 default <E> Seq<E> mapNotNull(Function<T, E> function) {...}
 ```
+
 #### 元素过滤 filter
 ```Java
+// (1, 2, 3, 4) -> filter(i -> i % 2 == 0) -> (2, 4)
 default Seq<T> filter(Predicate<T> predicate) {...}
+
 // 以及只在前n项里过滤
+// (1, 2, 3, 4) -> filter(2, i -> i % 2 == 0) -> (2, 3, 4)
 default Seq<T> filter(int n, Predicate<T> predicate) {...}
+
+// 带下标过滤
+// (1, 2, 3, 4) -> filterIndexed((index, i) -> index % 2 == 0) -> (1, 3)
+default Seq<T> filterIndexed(IndexObjPredicate<T> predicate) {...}
 ```
+
 其他过滤方法
 ```Java
-//取collection交集
+// 取collection交集
+// (1, 2, 3, 4) -> filterIn([3, 4, 5]) -> (3, 4)
 default Seq<T> filterIn(Collection<T> collection) {...}
-//取map交集
+
+// 取map交集
+// (1, 2, 3, 4) -> filterIn({3: "x", 4: "y", 5: "z"}) -> (3, 4)
 default Seq<T> filterIn(Map<T, ?> map) {...}
-//带下标过滤
-default Seq<T> filterIndexed(IndexObjPredicate<T> predicate) {...}
-//按类型过滤
+
+// 按类型过滤
+// (dog, cat, rock, water) -> filterInstance(Animal.class) -> (dog, cat)
 default <E> Seq<E> filterInstance(Class<E> cls) {...}
-//按条件否过滤
+
+// 按条件否过滤
 default Seq<T> filterNot(Predicate<T> predicate) {...}
 default Seq<T> filterNotIn(Collection<T> collection) {...}
 default Seq<T> filterNotIn(Map<T, ?> map) {...}
-//非空过滤
+
+// 非空过滤
+// (1, 2, null, 4) -> filterNotNull() -> (1, 2, 4)
 default Seq<T> filterNotNull() {...}
 ```
 
 #### 展平流 flatMap
-可以认为是Seq Monad
+可以认为`Seq`也是一种`Monad`，`flatMap`即是它的`bind`方法
 ```Java
+// (1, 2, 3, 4) -> flatMap(i -> repeat(2, i)) -> (1, 1, 2, 2, 3, 3, 4, 4)
 default <E> Seq<E> flatMap(Function<T, Seq<E>> function) {...}
 ```
+
 #### 按Optional展平 flatOptional
 ```Java
-default <E> Seq<E> flatOptional(Function<T, Optional<E>> function) {..
+// (1, 2, 3, 4) -> flatOptional(i -> Optional.of(i + 10)) -> (11, 12, 13, 14)
+default <E> Seq<E> flatOptional(Function<T, Optional<E>> function) {...}
 ```
 
 #### 处理元素 onEach
 处理但不消费
 ```Java
+// (1, 2, 3, 4) -> onEach(i -> print(i)) -> (1, 2, 3, 4) while print each
 default Seq<T> onEach(Consumer<T> consumer) {...}
-// 只peek前n项
+
+// 只处理前n项
+// (1, 2, 3, 4) -> onEach(2, i -> print(i)) -> (1, 2, 3, 4) while print 1, 2
 default Seq<T> onEach(int n, Consumer<T> consumer) {...}
+
 // 带下标peek
+// (1, 2, 3, 4) -> onEachIndexed((index, i) -> if (index % 2 == 0) print(i)) -> (1, 2, 3, 4) while print 2, 4
 default Seq<T> onEachIndexed(IndexObjConsumer<T> consumer) {...}
 ```
 
 #### 流的部分消费 partial
 只按照指定方式消费前n项，后面元素保留
 ```Java
+// (1, 2, 3, 4) -> partial(2, i -> print(i)) -> (3, 4) while print 1, 2
 default Seq<T> partial(int n, Consumer<T> substitute) {...}
 ```
 
 #### 翻转流 reverse
 ```Java
+// (1, 2, 3, 4) -> reverse() -> (4, 3, 2, 1)
 default ArraySeq<T> reverse() {...}
 ```
 
 #### 累加流 runningFold
 ```Java
+// (1, 2, 3, 4) -> runningFold(0, (i, j) -> i + j) -> (1, 3, 6, 10)
 default <E> Seq<E> runningFold(E init, BiFunction<E, T, E> function) {...}
 ```
+
 ### 流的窗口函数
 所谓窗口函数就是对流的元素按照某种规则进行局部聚合，每一个小组聚合为整体后，构成一个新的流。
 聚合的逻辑通常有三种，按次数，按时间，按头尾元素特征。
+
 #### 每n个元素分为一组 chunked
 ```Java
-// (1, 1, 2, 2, 2, 3, 4, 4, 5) -> n=3 -> ([1, 1, 2], [2, 2, 3], [4, 4, 5])
+// (1, 2, 3, 4, 5, 6, 7, 8) -> chunked(3) -> ([1, 2, 3], [4, 5, 6], [7, 8])
 default Seq<ArraySeq<T>> chunked(int size) {...}
 ```
+
 #### 按条件局部分组 mapSub
 ```Java
-// (1, 1, 2, 2, 2, 3, 4, 4, 5) -> isEven -> ([2, 2, 2], [4, 4])
+// 连续满足条件，分为一组，不满足即中断
+// (1, 1, 2, 2, 2, 3, 4, 4, 5) -> mapSub(isEven) -> ([2, 2, 2], [4, 4])
 default Seq<ArraySeq<T>> mapSub(Predicate<T> takeWhile) {...}
-// (1, 1, 2, 2, 2, 3, 4, 4, 5) -> (isEven, toSet) -> ({2}, {4})
+
+// 指定分组的聚合方式为toSet（默认为toList）
+// (1, 1, 2, 2, 2, 3, 4, 4, 5) -> mapSub(isEven, toSet) -> ({2}, {4})
 default <V> Seq<V> mapSub(Predicate<T> takeWhile, Reducer<T, V> reducer) {...}
-// (1, 1, 2, 2, 2, 3, 4, 4, 5) -> (isOdd, isEven, toList) -> ([1, 1, 2], [3, 4])
-default <V> Seq<V> mapSub(Predicate<T> first, Predicate<T> last, Reducer<T, V> reducer) {
+
+// 指定分组的开始条件与结束条件，如下示例为奇数开启，偶数结束
+// (1, 1, 2, 2, 2, 3, 4, 4, 5) -> mapSub(isOdd, isEven, toList) -> ([1, 1, 2], [3, 4])
+default <V> Seq<V> mapSub(Predicate<T> first, Predicate<T> last, Reducer<T, V> reducer) {...}
 ```
-#### 滑动窗口 windowed
-todo
+
+#### 按数量滑动开窗 windowed
+```Java
+// (1, 2, 3, 4) -> windowed(3, 1, true)  -> ([1, 2, 3], [2, 3, 4], [3, 4], [4])
+// (1, 2, 3, 4) -> windowed(3, 1, false) -> ([1, 2, 3], [2, 3, 4])
+// (1, 2, 3, 4) -> windowed(3, 2, true)  -> ([1, 2, 3], [3, 4])
+// (1, 2, 3, 4) -> windowed(3, 2, false) -> ([1, 2, 3])
+default Seq<ArraySeq<T>> windowed(int size, int step, boolean allowPartial)
+```
 
 #### 按时间开窗 windowedByTime
-需要热流和异步流发布后才能完全发挥价值
+需要热流和异步流发布后才能完全发挥价值，效果与`windowed`类似，只不过将数量窗替换为了时间窗
 todo
 
 ### 流的聚合
