@@ -73,6 +73,19 @@ public interface Reducer<T, V> {
         });
     }
 
+    static <T, K, V> Reducer<T, SeqMap<K, V>> groupBy(Function<T, K> toKey, Reducer<T, V> reducer) {
+        Supplier<V> supplier = reducer.supplier();
+        BiConsumer<V, T> accumulator = reducer.accumulator();
+        Consumer<V> finisher = reducer.finisher();
+        return of(SeqMap::hash, (m, t) ->
+                accumulator.accept(m.backer.computeIfAbsent(toKey.apply(t), k -> supplier.get()), t),
+            finisher == null ? null : m -> m.justValues().consume(finisher));
+    }
+
+    static <T, K, V, E> Transducer<T, SeqMap<K, V>, SeqMap<K, E>> groupBy(Function<T, K> toKey, Transducer<T, V, E> transducer) {
+        return Transducer.of(groupBy(toKey, transducer.reducer()), m -> m.replaceValue(transducer.transformer()));
+    }
+
     static <T> Transducer<T, StringJoiner, String> join(String sep, Function<T, String> function) {
         return Transducer.of(() -> new StringJoiner(sep), (j, t) -> j.add(function.apply(t)), StringJoiner::toString);
     }
@@ -314,6 +327,31 @@ public interface Reducer<T, V> {
 
     static <T> Reducer<T, ArraySeq<T>> toList(int initialCapacity) {
         return of(() -> new ArraySeq<>(initialCapacity), ArraySeq::add);
+    }
+
+    static <T, K, V> Reducer<T, SeqMap<K, V>> toMap(Function<T, K> toKey, Function<T, V> toValue) {
+        return of(SeqMap::hash, (m, t) -> m.backer.put(toKey.apply(t), toValue.apply(t)));
+    }
+
+    static <T, K, V> Reducer<T, SeqMap<K, V>> toMap(Supplier<Map<K, V>> mapSupplier,
+        Function<T, K> toKey, Function<T, V> toValue) {
+        return of(() -> new SeqMap<>(mapSupplier.get()), (m, t) -> m.backer.put(toKey.apply(t), toValue.apply(t)));
+    }
+
+    static <T, K> Reducer<T, SeqMap<K, T>> toMapBy(Function<T, K> toKey) {
+        return toMapBy(LinkedHashMap::new, toKey);
+    }
+
+    static <T, K> Reducer<T, SeqMap<K, T>> toMapBy(Supplier<Map<K, T>> mapSupplier, Function<T, K> toKey) {
+        return of(() -> new SeqMap<>(mapSupplier.get()), (m, t) -> m.backer.put(toKey.apply(t), t));
+    }
+
+    static <T, V> Reducer<T, SeqMap<T, V>> toMapWith(Function<T, V> toValue) {
+        return toMapWith(LinkedHashMap::new, toValue);
+    }
+
+    static <T, V> Reducer<T, SeqMap<T, V>> toMapWith(Supplier<Map<T, V>> mapSupplier, Function<T, V> toValue) {
+        return of(() -> new SeqMap<>(mapSupplier.get()), (m, t) -> m.backer.put(t, toValue.apply(t)));
     }
 
     static <T> Reducer<T, SeqSet<T>> toSet() {

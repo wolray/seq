@@ -103,6 +103,10 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
         return (ItrSeq<T>)iterable::iterator;
     }
 
+    static <K, V> SeqMap<K, V> of(Map<K, V> map) {
+        return SeqMap.of(map);
+    }
+
     static <T> Seq<T> of(Optional<T> optional) {
         return optional::ifPresent;
     }
@@ -500,6 +504,26 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
         return m.get();
     }
 
+    default <K> SeqMap<K, ArraySeq<T>> groupBy(Function<T, K> toKey) {
+        return groupBy(toKey, Reducer.toList());
+    }
+
+    default <K> SeqMap<K, T> groupBy(Function<T, K> toKey, BinaryOperator<T> operator) {
+        return groupBy(toKey, Reducer.fold(operator));
+    }
+
+    default <K, E> SeqMap<K, ArraySeq<E>> groupBy(Function<T, K> toKey, Function<T, E> toValue) {
+        return groupBy(toKey, Reducer.mapping(toValue));
+    }
+
+    default <K, V> SeqMap<K, V> groupBy(Function<T, K> toKey, Reducer<T, V> reducer) {
+        return reduce(Reducer.groupBy(toKey, reducer));
+    }
+
+    default <K, V, E> SeqMap<K, E> groupBy(Function<T, K> toKey, Transducer<T, V, E> transducer) {
+        return reduce(Reducer.groupBy(toKey, transducer));
+    }
+
     default String join(String sep) {
         return join(sep, Object::toString);
     }
@@ -583,6 +607,16 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
             if (e != null) {
                 c.accept(e);
             }
+        });
+    }
+
+    default Seq2<T, T> mapPair(boolean overlapping) {
+        return c -> reduce(new BoolPair<>(false, (T)null), (p, t) -> {
+            if (p.flag) {
+                c.accept(p.it, t);
+            }
+            p.flag = overlapping || !p.flag;
+            p.it = t;
         });
     }
 
@@ -676,6 +710,36 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
         return c -> consumeIndexed((i, t) -> {
             consumer.accept(i, t);
             c.accept(t);
+        });
+    }
+
+    default <A, B> Seq2<A, B> pair(Function<T, A> f1, Function<T, B> f2) {
+        return c -> consume(t -> c.accept(f1.apply(t), f2.apply(t)));
+    }
+
+    default <E> Seq2<E, T> pairBy(Function<T, E> function) {
+        return c -> consume(t -> c.accept(function.apply(t), t));
+    }
+
+    default <E> Seq2<E, T> pairByNotNull(Function<T, E> function) {
+        return c -> consume(t -> {
+            E e = function.apply(t);
+            if (e != null) {
+                c.accept(e, t);
+            }
+        });
+    }
+
+    default <E> Seq2<T, E> pairWith(Function<T, E> function) {
+        return c -> consume(t -> c.accept(t, function.apply(t)));
+    }
+
+    default <E> Seq2<T, E> pairWithNotNull(Function<T, E> function) {
+        return c -> consume(t -> {
+            E e = function.apply(t);
+            if (e != null) {
+                c.accept(t, e);
+            }
         });
     }
 
@@ -913,8 +977,20 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
         return reduce(new ArraySeq<>(sizeOrDefault()), ArraySeq::add);
     }
 
+    default <K, V> SeqMap<K, V> toMap(Function<T, K> toKey, Function<T, V> toValue) {
+        return reduce(Reducer.toMap(() -> new LinkedHashMap<>(sizeOrDefault()), toKey, toValue));
+    }
+
+    default <K> SeqMap<K, T> toMapBy(Function<T, K> toKey) {
+        return toMap(toKey, v -> v);
+    }
+
+    default <V> SeqMap<T, V> toMapWith(Function<T, V> toValue) {
+        return toMap(k -> k, toValue);
+    }
+
     default SeqSet<T> toSet() {
-        return reduce(new LinkedSeqSet<>(sizeOrDefault()), Set::add);
+        return reduce(Reducer.toSet(sizeOrDefault()));
     }
 
     default Seq<ArraySeq<T>> windowed(int size, int step, boolean allowPartial) {
@@ -1055,6 +1131,10 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
         Iterator<B> bi = bs.iterator();
         Iterator<C> ci = cs.iterator();
         consumeTillStop(t -> consumer.accept(t, ItrUtil.pop(bi), ItrUtil.pop(ci)));
+    }
+
+    default <E> Seq2<T, E> zip(Iterable<E> iterable) {
+        return c -> zip(iterable, c);
     }
 
     default <E> void zip(Iterable<E> iterable, BiConsumer<T, E> consumer) {

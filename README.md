@@ -7,7 +7,7 @@
 
 这一机制的设计思想与核心代码在上述公开文章中都已阐述完整，本项目是在此基础上的完全重写，并得到了原作者的鼓励与支持，未来发展也将主要面向开源社区需求。
 
-#### 引用方式
+## 引用方式
 项目已发布到Central Maven，直接引用即可
 ```xml
 <dependency>
@@ -16,9 +16,10 @@
     <version>1.0.1</version>
 </dependency>
 ```
-
-## 流的定义与种类
-### 普通流（一元流）
+## Wiki
+## 完备的流式API
+### 流的定义与种类
+#### 一元流
 ```Java
 public interface Seq<T> {
     void consume(Consumer<T> consumer);

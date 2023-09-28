@@ -6,7 +6,7 @@ import java.util.Collection;
 /**
  * @author wolray
  */
-public class ArraySeq<T> extends ArrayList<T> implements SizedSeq<T> {
+public class ArraySeq<T> extends ArrayList<T> implements SeqList<T> {
     public ArraySeq(int initialCapacity) {
         super(initialCapacity);
     }
