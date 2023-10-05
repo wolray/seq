@@ -12,7 +12,11 @@ public interface Reducer<T, V> {
     BiConsumer<V, T> accumulator();
     Consumer<V> finisher();
 
-    static <T> Transducer<T, double[], Double> average(ToDoubleFunction<T> function, ToDoubleFunction<T> weightFunction) {
+    static <T> Transducer<T, ?, Double> average(ToDoubleFunction<T> function) {
+        return average(function, null);
+    }
+
+    static <T> Transducer<T, ?, Double> average(ToDoubleFunction<T> function, ToDoubleFunction<T> weightFunction) {
         BiConsumer<double[], T> biConsumer;
         if (weightFunction != null) {
             biConsumer = (a, t) -> {
@@ -34,11 +38,11 @@ public interface Reducer<T, V> {
         return of(des, Collection::add);
     }
 
-    static <T> Transducer<T, int[], Integer> count() {
+    static <T> Transducer<T, ?, Integer> count() {
         return Transducer.of(() -> new int[1], (a, t) -> a[0]++, a -> a[0]);
     }
 
-    static <T> Transducer<T, int[], Integer> count(Predicate<T> predicate) {
+    static <T> Transducer<T, ?, Integer> count(Predicate<T> predicate) {
         return Transducer.of(() -> new int[1], (a, t) -> {
             if (predicate.test(t)) {
                 a[0]++;
@@ -46,12 +50,12 @@ public interface Reducer<T, V> {
         }, a -> a[0]);
     }
 
-    static <T> Transducer<T, int[], Integer> countNot(Predicate<T> predicate) {
+    static <T> Transducer<T, ?, Integer> countNot(Predicate<T> predicate) {
         return count(predicate.negate());
     }
 
-    static <T> Reducer<T, BatchedSeq<T>> filtering(Predicate<T> predicate) {
-        return filtering(predicate, toBatched());
+    static <T> Reducer<T, ArraySeq<T>> filtering(Predicate<T> predicate) {
+        return filtering(predicate, toList());
     }
 
     static <T, V> Reducer<T, V> filtering(Predicate<T> predicate, Reducer<T, V> reducer) {
@@ -63,14 +67,8 @@ public interface Reducer<T, V> {
         }, reducer.finisher());
     }
 
-    static <T> Transducer<T, Mutable<T>, T> fold(BinaryOperator<T> binaryOperator) {
-        return reduce((m, t) -> {
-            if (m.isSet) {
-                m.it = binaryOperator.apply(m.it, t);
-            } else {
-                m.set(t);
-            }
-        });
+    static <T, V, E> Transducer<T, V, E> filtering(Predicate<T> predicate, Transducer<T, V, E> transducer) {
+        return Transducer.of(filtering(predicate, transducer.reducer()), transducer.transformer());
     }
 
     static <T, K, V> Reducer<T, SeqMap<K, V>> groupBy(Function<T, K> toKey, Reducer<T, V> reducer) {
@@ -82,11 +80,11 @@ public interface Reducer<T, V> {
             finisher == null ? null : m -> m.justValues().consume(finisher));
     }
 
-    static <T, K, V, E> Transducer<T, SeqMap<K, V>, SeqMap<K, E>> groupBy(Function<T, K> toKey, Transducer<T, V, E> transducer) {
+    static <T, K, V, E> Transducer<T, ?, SeqMap<K, E>> groupBy(Function<T, K> toKey, Transducer<T, V, E> transducer) {
         return Transducer.of(groupBy(toKey, transducer.reducer()), m -> m.replaceValue(transducer.transformer()));
     }
 
-    static <T> Transducer<T, StringJoiner, String> join(String sep, Function<T, String> function) {
+    static <T> Transducer<T, ?, String> join(String sep, Function<T, String> function) {
         return Transducer.of(() -> new StringJoiner(sep), (j, t) -> j.add(function.apply(t)), StringJoiner::toString);
     }
 
@@ -102,12 +100,12 @@ public interface Reducer<T, V> {
         }, reducer.finisher());
     }
 
-    static <T> Transducer<T, Mutable<T>, T> max(Comparator<T> comparator) {
-        return reduce((m, t) -> {
-            if (m.it == null || comparator.compare(m.it, t) < 0) {
-                m.it = t;
-            }
-        });
+    static <T, R, V, E> Transducer<T, V, E> mapping(Function<T, R> mapper, Transducer<R, V, E> transducer) {
+        return Transducer.of(mapping(mapper, transducer.reducer()), transducer.transformer());
+    }
+
+    static <T> Transducer<T, ?, T> max(Comparator<T> comparator) {
+        return Transducer.of((t1, t2) -> comparator.compare(t1, t2) < 0 ? t2 : t1);
     }
 
     static <T, V extends Comparable<V>> Reducer<T, AtomicReference<Pair<T, V>>> maxAtomicBy(V initValue, Function<T, V> function) {
@@ -161,12 +159,8 @@ public interface Reducer<T, V> {
         });
     }
 
-    static <T> Transducer<T, Mutable<T>, T> min(Comparator<T> comparator) {
-        return reduce((m, t) -> {
-            if (m.it == null || comparator.compare(m.it, t) > 0) {
-                m.it = t;
-            }
-        });
+    static <T> Transducer<T, ?, T> min(Comparator<T> comparator) {
+        return Transducer.of((t1, t2) -> comparator.compare(t1, t2) > 0 ? t2 : t1);
     }
 
     static <T, V extends Comparable<V>> Reducer<T, AtomicReference<Pair<T, V>>> minAtomicBy(V initValue, Function<T, V> function) {
@@ -259,14 +253,10 @@ public interface Reducer<T, V> {
             });
     }
 
-    static <T, V, R> Transducer<T, Pair<V, V>, Pair<R, R>> partition(Predicate<T> predicate, Transducer<T, V, R> transducer) {
-        Function<V, R> transformer = transducer.transformer();
+    static <T, V, R> Transducer<T, ?, Pair<R, R>> partition(Predicate<T> predicate, Transducer<T, V, R> transducer) {
+        Function<V, R> mapper = transducer.transformer();
         return Transducer.of(partition(predicate, transducer.reducer()),
-            p -> new Pair<>(transformer.apply(p.first), transformer.apply(p.second)));
-    }
-
-    static <T, V> Transducer<T, Mutable<V>, V> reduce(BiConsumer<Mutable<V>, T> accumulator) {
-        return Transducer.of(() -> new Mutable<>(null), accumulator, Mutable::get);
+            p -> new Pair<>(mapper.apply(p.first), mapper.apply(p.second)));
     }
 
     static <T> Reducer<T, ArraySeq<T>> reverse() {
@@ -297,15 +287,15 @@ public interface Reducer<T, V> {
         return sort(Comparator.comparing(function).reversed());
     }
 
-    static <T> Transducer<T, double[], Double> sum(ToDoubleFunction<T> function) {
+    static <T> Transducer<T, ?, Double> sum(ToDoubleFunction<T> function) {
         return Transducer.of(() -> new double[1], (a, t) -> a[0] += function.applyAsDouble(t), a -> a[0]);
     }
 
-    static <T> Transducer<T, int[], Integer> sumInt(ToIntFunction<T> function) {
+    static <T> Transducer<T, ?, Integer> sumInt(ToIntFunction<T> function) {
         return Transducer.of(() -> new int[1], (a, t) -> a[0] += function.applyAsInt(t), a -> a[0]);
     }
 
-    static <T> Transducer<T, long[], Long> sumLong(ToLongFunction<T> function) {
+    static <T> Transducer<T, ?, Long> sumLong(ToLongFunction<T> function) {
         return Transducer.of(() -> new long[1], (a, t) -> a[0] += function.applyAsLong(t), a -> a[0]);
     }
 
@@ -333,8 +323,7 @@ public interface Reducer<T, V> {
         return of(SeqMap::hash, (m, t) -> m.put(toKey.apply(t), toValue.apply(t)));
     }
 
-    static <T, K, V> Reducer<T, SeqMap<K, V>> toMap(Supplier<Map<K, V>> mapSupplier,
-        Function<T, K> toKey, Function<T, V> toValue) {
+    static <T, K, V> Reducer<T, SeqMap<K, V>> toMap(Supplier<Map<K, V>> mapSupplier, Function<T, K> toKey, Function<T, V> toValue) {
         return of(() -> SeqMap.of(mapSupplier.get()), (m, t) -> m.put(toKey.apply(t), toValue.apply(t)));
     }
 

@@ -12,7 +12,6 @@ import guru.nidi.graphviz.model.Node;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.Map;
 
 /**
@@ -50,26 +49,19 @@ public class SeqClassesTest {
             .terminate(cls -> cls.getName().startsWith("java"))
             .toDAG(Seq.of(ArraySeq.class, LinkedSeq.class, ConcurrentSeq.class, LinkedSeqSet.class, BatchedSeq.class));
         Graph graph = graph(map);
-        try {
-            Graphviz.fromGraph(graph).render(Format.SVG).toFile(new File(String.format("src/test/resources/%s.svg", "seq-classes")));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        IOChain.apply(String.format("src/test/resources/%s.svg", "seq-classes"),
+            s -> Graphviz.fromGraph(graph).render(Format.SVG).toFile(new File(s)));
     }
 
     @Test
     public void testSeqMap() {
-        SeqExpand<Class<?>> expand = cls -> Seq.of(cls.getInterfaces()).append(cls.getSuperclass());
         Seq<Class<?>> ignore = Seq.of(Seq0.class);
-        Map<Class<?>, ArraySeq<Class<?>>> map = expand
+        Map<Class<?>, ArraySeq<Class<?>>> map = CLASS_EXPAND
             .filterNot(ignore.toSet()::contains)
             .terminate(cls -> cls.getName().startsWith("java"))
             .toDAG(Seq.of(LinkedSeqMap.class));
         Graph graph = graph(map);
-        try {
-            Graphviz.fromGraph(graph).render(Format.SVG).toFile(new File(String.format("src/test/resources/%s.svg", "seq-map")));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        IOChain.apply(String.format("src/test/resources/%s.svg", "seq-map"),
+            s -> Graphviz.fromGraph(graph).render(Format.SVG).toFile(new File(s)));
     }
 }

@@ -57,11 +57,7 @@ public interface Splitter {
     }
 
     static Splitter ofEmpty() {
-        return (s, limit) -> c -> {
-            for (int i = 0, max = Math.min(s.length(), limit); i < max; i++) {
-                c.accept(Character.toString(s.charAt(i)));
-            }
-        };
+        return (s, limit) -> Seq.unit(s);
     }
 
     static String substring(char[] chars, int start, int end) {

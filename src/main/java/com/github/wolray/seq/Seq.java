@@ -1,15 +1,10 @@
 package com.github.wolray.seq;
 
-import java.io.BufferedWriter;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 /**
  * @author wolray
@@ -99,13 +94,7 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
     }
 
     static <T> Seq<T> of(Iterable<T> iterable) {
-        if (iterable instanceof ItrSeq) {
-            return (ItrSeq<T>)iterable;
-        }
-        if (iterable instanceof Collection) {
-            return new BackedSeq<>((Collection<T>)iterable);
-        }
-        return (ItrSeq<T>)iterable::iterator;
+        return iterable instanceof ItrSeq ? (ItrSeq<T>)iterable : (ItrSeq<T>)iterable::iterator;
     }
 
     static <K, V> SeqMap<K, V> of(Map<K, V> map) {
@@ -118,11 +107,11 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
 
     @SafeVarargs
     static <T> Seq<T> of(T... ts) {
-        return new BackedSeq<>(Arrays.asList(ts));
+        return of(Arrays.asList(ts));
     }
 
     static Seq<Object> ofJson(Object node) {
-        return ofTree(node, n -> c -> {
+        return Seq.ofTree(node, n -> c -> {
             if (n instanceof Iterable) {
                 ((Iterable<?>)n).forEach(c);
             } else if (n instanceof Map) {
@@ -132,11 +121,11 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
     }
 
     static <N> Seq<N> ofTree(int maxDepth, N node, Function<N, Seq<N>> sub) {
-        return ((SeqExpand<N>)sub::apply).toSeq(node, maxDepth);
+        return SeqExpand.of(sub).toSeq(node, maxDepth);
     }
 
     static <N> Seq<N> ofTree(N node, Function<N, Seq<N>> sub) {
-        return ((SeqExpand<N>)sub::apply).toSeq(node);
+        return SeqExpand.of(sub).toSeq(node);
     }
 
     static <T> ItrSeq<T> repeat(int n, T t) {
@@ -514,7 +503,7 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
     }
 
     default <K> SeqMap<K, T> groupBy(Function<T, K> toKey, BinaryOperator<T> operator) {
-        return groupBy(toKey, Reducer.fold(operator));
+        return groupBy(toKey, Transducer.of(operator));
     }
 
     default <K, E> SeqMap<K, ArraySeq<E>> groupBy(Function<T, K> toKey, Function<T, E> toValue) {
@@ -765,7 +754,7 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
     }
 
     default T reduce(BinaryOperator<T> binaryOperator) {
-        return reduce(Reducer.fold(binaryOperator));
+        return reduce(Transducer.of(binaryOperator));
     }
 
     default <E> E reduce(E des, BiConsumer<E, T> accumulator) {
@@ -966,21 +955,6 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
         return reduce(new ConcurrentSeq<>(), ConcurrentSeq::add);
     }
 
-    default void toFile(FileWriter fileWriter, Function<T, String> formatter) {
-        try (BufferedWriter bufferedWriter = new BufferedWriter(fileWriter)) {
-            consume(s -> {
-                try {
-                    bufferedWriter.write(formatter.apply(s));
-                    bufferedWriter.newLine();
-                } catch (IOException e) {
-                    throw new UncheckedIOException(e);
-                }
-            });
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
     default <E> Lazy<E> toLazy(Reducer<T, E> reducer) {
         return Lazy.of(() -> reduce(reducer));
     }
@@ -1011,26 +985,6 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
 
     default SeqSet<T> toSet() {
         return reduce(Reducer.toSet(sizeOrDefault()));
-    }
-
-    default Stream<T> toStream() {
-        Iterator<T> iterator = new Iterator<T>() {
-            @Override
-            public boolean hasNext() {
-                throw new NoSuchElementException();
-            }
-
-            @Override
-            public T next() {
-                throw new NoSuchElementException();
-            }
-
-            @Override
-            public void forEachRemaining(Consumer<? super T> action) {
-                consume(action::accept);
-            }
-        };
-        return ItrUtil.toStream(iterator);
     }
 
     default <A, B, D> Seq3<A, B, D> triple(BiConsumer<Consumer3<A, B, D>, T> consumer) {

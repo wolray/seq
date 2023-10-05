@@ -37,7 +37,7 @@ public interface SizedSeq<T> extends ItrSeq<T> {
     }
 
     @Override
-    default <E> ItrSeq<E> map(Function<T, E> function) {
+    default <E> SizedSeq<E> map(Function<T, E> function) {
         return new SizedSeq<E>() {
             @Override
             public Iterator<E> iterator() {

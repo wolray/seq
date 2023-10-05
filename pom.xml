@@ -6,7 +6,7 @@
 
     <groupId>io.github.wolray</groupId>
     <artifactId>seq</artifactId>
-    <version>1.0.1</version>
+    <version>1.0.2</version>
 
     <name>${project.groupId}:${project.artifactId}</name>
     <description>A powerful generator-like streaming API for Java</description>
