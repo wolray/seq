@@ -1,10 +1,15 @@
 package com.github.wolray.seq;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * @author wolray
@@ -117,7 +122,7 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
     }
 
     static Seq<Object> ofJson(Object node) {
-        return Seq.ofTree(node, n -> c -> {
+        return ofTree(node, n -> c -> {
             if (n instanceof Iterable) {
                 ((Iterable<?>)n).forEach(c);
             } else if (n instanceof Map) {
@@ -127,11 +132,11 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
     }
 
     static <N> Seq<N> ofTree(int maxDepth, N node, Function<N, Seq<N>> sub) {
-        return c -> SeqUtil.scanTree(c, maxDepth, 0, node, sub);
+        return ((SeqExpand<N>)sub::apply).toSeq(node, maxDepth);
     }
 
     static <N> Seq<N> ofTree(N node, Function<N, Seq<N>> sub) {
-        return c -> SeqUtil.scanTree(c, node, sub);
+        return ((SeqExpand<N>)sub::apply).toSeq(node);
     }
 
     static <T> ItrSeq<T> repeat(int n, T t) {
@@ -961,6 +966,21 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
         return reduce(new ConcurrentSeq<>(), ConcurrentSeq::add);
     }
 
+    default void toFile(FileWriter fileWriter, Function<T, String> formatter) {
+        try (BufferedWriter bufferedWriter = new BufferedWriter(fileWriter)) {
+            consume(s -> {
+                try {
+                    bufferedWriter.write(formatter.apply(s));
+                    bufferedWriter.newLine();
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            });
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     default <E> Lazy<E> toLazy(Reducer<T, E> reducer) {
         return Lazy.of(() -> reduce(reducer));
     }
@@ -991,6 +1011,26 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
 
     default SeqSet<T> toSet() {
         return reduce(Reducer.toSet(sizeOrDefault()));
+    }
+
+    default Stream<T> toStream() {
+        Iterator<T> iterator = new Iterator<T>() {
+            @Override
+            public boolean hasNext() {
+                throw new NoSuchElementException();
+            }
+
+            @Override
+            public T next() {
+                throw new NoSuchElementException();
+            }
+
+            @Override
+            public void forEachRemaining(Consumer<? super T> action) {
+                consume(action::accept);
+            }
+        };
+        return ItrUtil.toStream(iterator);
     }
 
     default <A, B, D> Seq3<A, B, D> triple(BiConsumer<Consumer3<A, B, D>, T> consumer) {

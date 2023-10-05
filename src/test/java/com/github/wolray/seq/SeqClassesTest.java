@@ -19,6 +19,8 @@ import java.util.Map;
  * @author wolray
  */
 public class SeqClassesTest {
+    public static final SeqExpand<Class<?>> CLASS_EXPAND = cls -> Seq.of(cls.getInterfaces()).append(cls.getSuperclass());
+
     public static Graph graph(Map<Class<?>, ArraySeq<Class<?>>> map) {
         Map<Class<?>, Pair<Class<?>, Node>> nodeMap = SeqMap.of(map).mapByValue((cls, parents) -> {
             Node nd = Factory.node(cls.getSimpleName());
@@ -42,15 +44,30 @@ public class SeqClassesTest {
 
     @Test
     public void testClasses() {
-        SeqExpand<Class<?>> expand = cls -> Seq.of(cls.getInterfaces()).append(cls.getSuperclass());
-        Seq<Class<?>> ignore = Seq.of(Seq0.class, Object.class, SeqCollection.class);
-        Map<Class<?>, ArraySeq<Class<?>>> map = expand
+        Seq<Class<?>> ignore = Seq.of(Seq0.class, Object.class);
+        Map<Class<?>, ArraySeq<Class<?>>> map = CLASS_EXPAND
             .filterNot(ignore.toSet()::contains)
             .terminate(cls -> cls.getName().startsWith("java"))
-            .toDAG(Seq.of(ArraySeq.class, LinkedSeq.class, ConcurrentSeq.class, LinkedSeqSet.class));
+            .toDAG(Seq.of(ArraySeq.class, LinkedSeq.class, ConcurrentSeq.class, LinkedSeqSet.class, BatchedSeq.class));
         Graph graph = graph(map);
         try {
             Graphviz.fromGraph(graph).render(Format.SVG).toFile(new File(String.format("src/test/resources/%s.svg", "seq-classes")));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    public void testSeqMap() {
+        SeqExpand<Class<?>> expand = cls -> Seq.of(cls.getInterfaces()).append(cls.getSuperclass());
+        Seq<Class<?>> ignore = Seq.of(Seq0.class);
+        Map<Class<?>, ArraySeq<Class<?>>> map = expand
+            .filterNot(ignore.toSet()::contains)
+            .terminate(cls -> cls.getName().startsWith("java"))
+            .toDAG(Seq.of(LinkedSeqMap.class));
+        Graph graph = graph(map);
+        try {
+            Graphviz.fromGraph(graph).render(Format.SVG).toFile(new File(String.format("src/test/resources/%s.svg", "seq-map")));
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
