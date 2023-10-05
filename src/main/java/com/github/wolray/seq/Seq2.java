@@ -148,8 +148,8 @@ public interface Seq2<K, V> extends Seq0<BiConsumer<K, V>> {
         return map(Pair::new);
     }
 
-    default <E> E reduce(E des, Consumer3<E, K, V> feeder) {
-        consume((k, v) -> feeder.accept(des, k, v));
+    default <E> E reduce(E des, Consumer3<E, K, V> accumulator) {
+        consume((k, v) -> accumulator.accept(des, k, v));
         return des;
     }
 

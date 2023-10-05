@@ -78,7 +78,7 @@ public interface Reducer<T, V> {
         BiConsumer<V, T> accumulator = reducer.accumulator();
         Consumer<V> finisher = reducer.finisher();
         return of(SeqMap::hash, (m, t) ->
-                accumulator.accept(m.backer.computeIfAbsent(toKey.apply(t), k -> supplier.get()), t),
+                accumulator.accept(m.computeIfAbsent(toKey.apply(t), k -> supplier.get()), t),
             finisher == null ? null : m -> m.justValues().consume(finisher));
     }
 
@@ -330,12 +330,12 @@ public interface Reducer<T, V> {
     }
 
     static <T, K, V> Reducer<T, SeqMap<K, V>> toMap(Function<T, K> toKey, Function<T, V> toValue) {
-        return of(SeqMap::hash, (m, t) -> m.backer.put(toKey.apply(t), toValue.apply(t)));
+        return of(SeqMap::hash, (m, t) -> m.put(toKey.apply(t), toValue.apply(t)));
     }
 
     static <T, K, V> Reducer<T, SeqMap<K, V>> toMap(Supplier<Map<K, V>> mapSupplier,
         Function<T, K> toKey, Function<T, V> toValue) {
-        return of(() -> new SeqMap<>(mapSupplier.get()), (m, t) -> m.backer.put(toKey.apply(t), toValue.apply(t)));
+        return of(() -> SeqMap.of(mapSupplier.get()), (m, t) -> m.put(toKey.apply(t), toValue.apply(t)));
     }
 
     static <T, K> Reducer<T, SeqMap<K, T>> toMapBy(Function<T, K> toKey) {
@@ -343,7 +343,7 @@ public interface Reducer<T, V> {
     }
 
     static <T, K> Reducer<T, SeqMap<K, T>> toMapBy(Supplier<Map<K, T>> mapSupplier, Function<T, K> toKey) {
-        return of(() -> new SeqMap<>(mapSupplier.get()), (m, t) -> m.backer.put(toKey.apply(t), t));
+        return of(() -> SeqMap.of(mapSupplier.get()), (m, t) -> m.put(toKey.apply(t), t));
     }
 
     static <T, V> Reducer<T, SeqMap<T, V>> toMapWith(Function<T, V> toValue) {
@@ -351,7 +351,7 @@ public interface Reducer<T, V> {
     }
 
     static <T, V> Reducer<T, SeqMap<T, V>> toMapWith(Supplier<Map<T, V>> mapSupplier, Function<T, V> toValue) {
-        return of(() -> new SeqMap<>(mapSupplier.get()), (m, t) -> m.backer.put(t, toValue.apply(t)));
+        return of(() -> SeqMap.of(mapSupplier.get()), (m, t) -> m.put(t, toValue.apply(t)));
     }
 
     static <T> Reducer<T, SeqSet<T>> toSet() {

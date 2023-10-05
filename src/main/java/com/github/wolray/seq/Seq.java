@@ -993,6 +993,14 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
         return reduce(Reducer.toSet(sizeOrDefault()));
     }
 
+    default <A, B, D> Seq3<A, B, D> triple(BiConsumer<Consumer3<A, B, D>, T> consumer) {
+        return c -> consume(t -> consumer.accept(c, t));
+    }
+
+    default <A, B, D> Seq3<A, B, D> triple(Function<T, A> f1, Function<T, B> f2, Function<T, D> f3) {
+        return c -> consume(t -> c.accept(f1.apply(t), f2.apply(t), f3.apply(t)));
+    }
+
     default Seq<ArraySeq<T>> windowed(int size, int step, boolean allowPartial) {
         return windowed(size, step, allowPartial, Reducer.toList());
     }
@@ -1125,6 +1133,10 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
 
     default Seq<IntPair<T>> withIndex() {
         return c -> consumeIndexed((i, t) -> c.accept(new IntPair<>(i, t)));
+    }
+
+    default <B, C> Seq3<T, B, C> zip(Iterable<B> bs, Iterable<C> cs) {
+        return c -> zip(bs, cs, c);
     }
 
     default <B, C> void zip(Iterable<B> bs, Iterable<C> cs, Consumer3<T, B, C> consumer) {

@@ -13,7 +13,6 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -21,15 +20,13 @@ import java.util.Map;
  */
 public class SeqClassesTest {
     public static Graph graph(Map<Class<?>, ArraySeq<Class<?>>> map) {
-        Map<Class<?>, Pair<Class<?>, Node>> nodeMap = new HashMap<>();
-        map.forEach((cls, parents) ->
-            nodeMap.computeIfAbsent(cls, k -> {
-                Node nd = Factory.node(k.getSimpleName());
-                if (!cls.isInterface()) {
-                    nd = nd.with(Shape.BOX);
-                }
-                return new Pair<>(k, nd);
-            }));
+        Map<Class<?>, Pair<Class<?>, Node>> nodeMap = SeqMap.of(map).mapByValue((cls, parents) -> {
+            Node nd = Factory.node(cls.getSimpleName());
+            if (!cls.isInterface()) {
+                nd = nd.with(Shape.BOX);
+            }
+            return new Pair<>(cls, nd);
+        });
         Seq<LinkSource> linkSources = c -> nodeMap.forEach((name, pair) -> {
             Node curr = pair.second;
             for (Class<?> parent : map.get(pair.first)) {
@@ -46,12 +43,11 @@ public class SeqClassesTest {
     @Test
     public void testClasses() {
         SeqExpand<Class<?>> expand = cls -> Seq.of(cls.getInterfaces()).append(cls.getSuperclass());
+        Seq<Class<?>> ignore = Seq.of(Seq0.class, Object.class, SeqCollection.class);
         Map<Class<?>, ArraySeq<Class<?>>> map = expand
-            .filter(c -> Seq0.class != c && Object.class != c
-                && SeqCollection.class != c && SeqProxy.ProxyCollection.class != c)
+            .filterNot(ignore.toSet()::contains)
             .terminate(cls -> cls.getName().startsWith("java"))
-            .toDAG(Seq.of(ArraySeq.class, LinkedSeq.class, ConcurrentSeq.class, LinkedSeqSet.class,
-                SeqProxy.ProxyList.class, SeqProxy.ProxySet.class, SeqProxy.ProxyQueue.class));
+            .toDAG(Seq.of(ArraySeq.class, LinkedSeq.class, ConcurrentSeq.class, LinkedSeqSet.class));
         Graph graph = graph(map);
         try {
             Graphviz.fromGraph(graph).render(Format.SVG).toFile(new File(String.format("src/test/resources/%s.svg", "seq-classes")));

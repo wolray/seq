@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
 
 /**
  * @author wolray
@@ -16,6 +17,10 @@ public interface SeqExpand<T> extends Function<T, Seq<T>> {
 
     default SeqExpand<T> filterNot(Predicate<T> predicate) {
         return t -> apply(t).filter(predicate.negate());
+    }
+
+    default SeqExpand<T> mapping(UnaryOperator<Seq<T>> operator) {
+        return t -> operator.apply(apply(t));
     }
 
     default void scan(Consumer<T> c, T node) {
@@ -51,14 +56,14 @@ public interface SeqExpand<T> extends Function<T, Seq<T>> {
         return t -> predicate.test(t) ? Seq.empty() : apply(t);
     }
 
+    default Map<T, ArraySeq<T>> toDAG(Seq<T> nodes) {
+        return nodes.reduce(new HashMap<>(), this::scan);
+    }
+
     default Map<T, ArraySeq<T>> toDAG(T node) {
         Map<T, ArraySeq<T>> map = new HashMap<>();
         scan(map, node);
         return map;
-    }
-
-    default Map<T, ArraySeq<T>> toDAG(Seq<T> nodes) {
-        return nodes.reduce(new HashMap<>(), this::scan);
     }
 
     default Seq<T> toSeq(T node) {
