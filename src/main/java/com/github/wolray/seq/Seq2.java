@@ -21,6 +21,10 @@ public interface Seq2<K, V> extends Seq0<BiConsumer<K, V>> {
         return (BiConsumer<K, V>)Empty.nothing;
     }
 
+    static <K, V> Seq2<K, V> of(Map<K, V> map) {
+        return map instanceof SeqMap ? (SeqMap<K, V>)map : map::forEach;
+    }
+
     static Seq2<String, String> parseMap(char[] chars, char entrySep, char kvSep) {
         return c -> {
             int len = chars.length, last = 0;
@@ -78,6 +82,12 @@ public interface Seq2<K, V> extends Seq0<BiConsumer<K, V>> {
                 c.accept(k, v);
             }
         });
+    }
+
+    default <E> E fold(E init, Function3<E, K, V, E> function) {
+        Mutable<E> m = new Mutable<>(init);
+        consume((k, v) -> m.it = function.apply(m.it, k, v));
+        return m.it;
     }
 
     default Seq<K> justKeys() {
