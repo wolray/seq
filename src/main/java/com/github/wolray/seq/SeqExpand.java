@@ -2,7 +2,10 @@ package com.github.wolray.seq;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.*;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * @author wolray
@@ -51,12 +54,15 @@ public interface SeqExpand<T> extends Function<T, Seq<T>> {
     }
 
     default Map<T, ArraySeq<T>> toDAG(Seq<T> nodes) {
-        return nodes.reduce(new HashMap<>(), (map, node) -> scan(map::put, node));
+        Map<T, ArraySeq<T>> map = new HashMap<>();
+        SeqExpand<T> expand = terminate(t -> !map.containsKey(t));
+        nodes.consume(t -> expand.scan(map::put, t));
+        return map;
     }
 
     default Map<T, ArraySeq<T>> toDAG(T node) {
         Map<T, ArraySeq<T>> map = new HashMap<>();
-        scan(map::put, node);
+        terminate(t -> !map.containsKey(t)).scan(map::put, node);
         return map;
     }
 

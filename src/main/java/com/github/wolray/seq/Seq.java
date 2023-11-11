@@ -308,7 +308,11 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
     }
 
     default Seq<T> distinct() {
-        return toSet();
+        return c -> reduce(new HashSet<>(), (set, t) -> {
+            if (set.add(t)) {
+                c.accept(t);
+            }
+        });
     }
 
     default <E> Seq<T> distinctBy(Function<T, E> function) {

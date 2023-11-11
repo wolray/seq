@@ -45,6 +45,8 @@ public class SeqTest {
         assertTo(Seq.repeat(5, 1), "1,1,1,1,1");
         assertTo(IntSeq.repeat(5, 1).boxed(), "1,1,1,1,1");
         assertTo(IntSeq.range(0, 10, 2).boxed(), "0,2,4,6,8");
+
+        assertTo(Seq.of(1, 1, 1, 2, 2).distinct(), "1,2");
     }
 
     @Test
