@@ -741,6 +741,22 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
         });
     }
 
+    default Seq<T> parallel() {
+        return parallel(Async.common());
+    }
+
+    default Seq<T> parallel(Async async) {
+        return c -> async.joinAll(map(t -> () -> c.accept(t)));
+    }
+
+    default Seq<T> parallelNoJoin() {
+        return parallelNoJoin(Async.common());
+    }
+
+    default Seq<T> parallelNoJoin(Async async) {
+        return c -> consume(t -> async.submit(() -> c.accept(t)));
+    }
+
     default Seq<T> partial(int n, Consumer<T> substitute) {
         return c -> consume(c, n, substitute);
     }

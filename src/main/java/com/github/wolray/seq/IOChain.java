@@ -21,6 +21,13 @@ public interface IOChain<T> {
         return supplier;
     }
 
+    static IOChain<Void> of(Runnable runnable) {
+        return () -> {
+            runnable.run();
+            return null;
+        };
+    }
+
     static <T> IOChain<T> of(T t) {
         return () -> t;
     }
@@ -111,6 +118,14 @@ public interface IOChain<T> {
             }
             while ((e = provider.apply(t)) != null) {
                 c.accept(e);
+            }
+        });
+    }
+
+    default <E> Seq<E> toSeq(long limit, Function<T, E> provider) {
+        return c -> use(t -> {
+            for (long i = 0; i < limit; i++) {
+                c.accept(provider.apply(t));
             }
         });
     }
