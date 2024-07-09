@@ -817,6 +817,14 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
         });
     }
 
+    default Seq<T> shareIn(int buffer, Async async) {
+        return async.toShared(buffer, false, this);
+    }
+
+    default Seq<T> shareIn(int buffer, boolean delay, Async async) {
+        return async.toShared(buffer, delay, this);
+    }
+
     default int sizeOrDefault() {
         return 10;
     }
@@ -857,6 +865,10 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
 
     default ArraySeq<T> sortWithDesc(Comparator<T> comparator) {
         return sortWith(comparator.reversed());
+    }
+
+    default Seq<T> stateIn(boolean delay, Async async) {
+        return async.toState(delay, this);
     }
 
     default double sum(ToDoubleFunction<T> function) {
