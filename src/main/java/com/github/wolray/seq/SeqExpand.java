@@ -55,14 +55,14 @@ public interface SeqExpand<T> extends Function<T, Seq<T>> {
 
     default Map<T, ArraySeq<T>> toDAG(Seq<T> nodes) {
         Map<T, ArraySeq<T>> map = new HashMap<>();
-        SeqExpand<T> expand = terminate(t -> !map.containsKey(t));
-        nodes.consume(t -> expand.scan(map::put, t));
+        SeqExpand<T> expand = terminate(map::containsKey);
+        nodes.consume(t -> expand.scan(map::putIfAbsent, t));
         return map;
     }
 
     default Map<T, ArraySeq<T>> toDAG(T node) {
         Map<T, ArraySeq<T>> map = new HashMap<>();
-        terminate(t -> !map.containsKey(t)).scan(map::put, node);
+        terminate(map::containsKey).scan(map::putIfAbsent, node);
         return map;
     }
 
