@@ -8,9 +8,9 @@ import java.util.function.*;
  * @author wolray
  */
 public interface Reducer<T, V> {
-    Supplier<V> supplier();
     BiConsumer<V, T> accumulator();
     Consumer<V> finisher();
+    Supplier<V> supplier();
 
     static <T> Transducer<T, ?, Double> average(ToDoubleFunction<T> function) {
         return average(function, null);

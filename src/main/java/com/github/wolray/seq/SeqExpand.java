@@ -53,16 +53,16 @@ public interface SeqExpand<T> extends Function<T, Seq<T>> {
         return t -> predicate.test(t) ? Seq.empty() : apply(t);
     }
 
+    default Map<T, ArraySeq<T>> toDAG(T node) {
+        Map<T, ArraySeq<T>> map = new HashMap<>();
+        terminate(map::containsKey).scan(map::putIfAbsent, node);
+        return map;
+    }
+
     default Map<T, ArraySeq<T>> toDAG(Seq<T> nodes) {
         Map<T, ArraySeq<T>> map = new HashMap<>();
         SeqExpand<T> expand = terminate(map::containsKey);
         nodes.consume(t -> expand.scan(map::putIfAbsent, t));
-        return map;
-    }
-
-    default Map<T, ArraySeq<T>> toDAG(T node) {
-        Map<T, ArraySeq<T>> map = new HashMap<>();
-        terminate(map::containsKey).scan(map::putIfAbsent, node);
         return map;
     }
 

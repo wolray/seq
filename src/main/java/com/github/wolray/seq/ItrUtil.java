@@ -143,6 +143,16 @@ public interface ItrUtil {
         };
     }
 
+    static <T> Iterator<T> takeWhile(Iterator<T> iterator, Predicate<T> predicate) {
+        return new PickItr<T>() {
+            @Override
+            public T pick() {
+                T t = pop(iterator);
+                return predicate.test(t) ? t : Seq.stop();
+            }
+        };
+    }
+
     static <T, E> Iterator<T> takeWhile(Iterator<T> iterator, Function<T, E> function, BiPredicate<E, E> testPrevCurr) {
         return new PickItr<T>() {
             E last = null;
@@ -157,16 +167,6 @@ public interface ItrUtil {
                 } else {
                     return Seq.stop();
                 }
-            }
-        };
-    }
-
-    static <T> Iterator<T> takeWhile(Iterator<T> iterator, Predicate<T> predicate) {
-        return new PickItr<T>() {
-            @Override
-            public T pick() {
-                T t = pop(iterator);
-                return predicate.test(t) ? t : Seq.stop();
             }
         };
     }

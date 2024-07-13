@@ -182,13 +182,13 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
     }
 
     @Override
-    default <E> ItrSeq<T> takeWhile(Function<T, E> function, BiPredicate<E, E> testPrevCurr) {
-        return () -> ItrUtil.takeWhile(iterator(), function, testPrevCurr);
+    default ItrSeq<T> takeWhile(Predicate<T> predicate) {
+        return () -> ItrUtil.takeWhile(iterator(), predicate);
     }
 
     @Override
-    default ItrSeq<T> takeWhile(Predicate<T> predicate) {
-        return () -> ItrUtil.takeWhile(iterator(), predicate);
+    default <E> ItrSeq<T> takeWhile(Function<T, E> function, BiPredicate<E, E> testPrevCurr) {
+        return () -> ItrUtil.takeWhile(iterator(), function, testPrevCurr);
     }
 
     default ItrSeq<T> zip(T t) {

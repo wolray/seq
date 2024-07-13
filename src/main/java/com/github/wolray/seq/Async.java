@@ -10,11 +10,9 @@ import java.util.function.Consumer;
  * @author wolray
  */
 public interface Async {
-    Object submit(Runnable runnable);
-
     void join(Object task);
-
     void joinAll(Seq<Runnable> tasks);
+    Object submit(Runnable runnable);
 
     static void apply(ThreadRunnable runnable) {
         try {

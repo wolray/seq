@@ -1,11 +1,8 @@
 package com.github.wolray.seq;
 
-import java.util.*;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveTask;
 import java.util.function.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * @author wolray
@@ -15,6 +12,18 @@ public interface Lazy<T> extends Supplier<T> {
 
     static <T> Lazy<T> of(Seq<T> seq) {
         return seq.lazyLast();
+    }
+
+    static <T> Lazy<T> of(Supplier<T> supplier) {
+        if (supplier instanceof Lazy) {
+            return (Lazy<T>)supplier;
+        }
+        return new Mutable<T>(null) {
+            @Override
+            protected void eval() {
+                it = supplier.get();
+            }
+        };
     }
 
     static <A, T> Lazy<T> of(Supplier<A> s1, Function<A, T> function) {
@@ -107,18 +116,6 @@ public interface Lazy<T> extends Supplier<T> {
                 Supplier<E> e = submit(pool, s5);
                 Supplier<F> f = submit(pool, s6);
                 it = function.apply(a.get(), b.get(), c.get(), d.get(), e.get(), f.get());
-            }
-        };
-    }
-
-    static <T> Lazy<T> of(Supplier<T> supplier) {
-        if (supplier instanceof Lazy) {
-            return (Lazy<T>)supplier;
-        }
-        return new Mutable<T>(null) {
-            @Override
-            protected void eval() {
-                it = supplier.get();
             }
         };
     }

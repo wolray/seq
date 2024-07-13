@@ -15,39 +15,16 @@ import java.util.function.UnaryOperator;
  * @author wolray
  */
 public interface ByteSource extends IOChain.Closable<InputStream> {
-    static ByteSource of(byte[] bytes) {
-        return new ByteSource() {
-            @Override
-            public InputStream call() {
-                return new ByteArrayInputStream(bytes);
-            }
-
-            @Override
-            public byte[] toBytes() {
-                return bytes;
-            }
-
-            @Override
-            public ByteSource cache() {
-                return this;
-            }
-        };
-    }
-
-    static ByteSource of(File file) {
-        return of(file.toPath());
-    }
-
     static ByteSource of(InputStream is) {
         return () -> is;
     }
 
-    static ByteSource of(Iterable<String> iterable) {
-        return of(iterable, "\n");
+    static ByteSource of(URL url) {
+        return url::openStream;
     }
 
-    static ByteSource of(Iterable<String> iterable, String separator) {
-        return () -> ItrUtil.toInputStream(iterable.iterator(), separator);
+    static ByteSource of(File file) {
+        return of(file.toPath());
     }
 
     static ByteSource of(Path path) {
@@ -77,8 +54,31 @@ public interface ByteSource extends IOChain.Closable<InputStream> {
         };
     }
 
-    static ByteSource of(URL url) {
-        return url::openStream;
+    static ByteSource of(byte[] bytes) {
+        return new ByteSource() {
+            @Override
+            public InputStream call() {
+                return new ByteArrayInputStream(bytes);
+            }
+
+            @Override
+            public byte[] toBytes() {
+                return bytes;
+            }
+
+            @Override
+            public ByteSource cache() {
+                return this;
+            }
+        };
+    }
+
+    static ByteSource of(Iterable<String> iterable) {
+        return of(iterable, "\n");
+    }
+
+    static ByteSource of(Iterable<String> iterable, String separator) {
+        return () -> ItrUtil.toInputStream(iterable.iterator(), separator);
     }
 
     static ByteSource ofArray(IOChain<byte[]> bytes) {
@@ -87,6 +87,10 @@ public interface ByteSource extends IOChain.Closable<InputStream> {
 
     static ByteSource ofPath(IOChain<Path> path) {
         return of(path.get());
+    }
+
+    static ByteSource ofResource(String resource) {
+        return ofResource(ByteSource.class, resource);
     }
 
     static ByteSource ofResource(Class<?> cls, String resource) {
@@ -100,10 +104,6 @@ public interface ByteSource extends IOChain.Closable<InputStream> {
                 return of(url);
             }
         });
-    }
-
-    static ByteSource ofResource(String resource) {
-        return ofResource(ByteSource.class, resource);
     }
 
     static ByteSource ofStream(IOChain<InputStream> is) {
@@ -166,12 +166,12 @@ public interface ByteSource extends IOChain.Closable<InputStream> {
         return toReader().toSeq(BufferedReader::readLine);
     }
 
-    default Seq<String> toSeq(int n, UnaryOperator<String> replace) {
-        return toReader().toSeq(BufferedReader::readLine, n, replace);
-    }
-
     default Seq<String> toSeq(int skip) {
         return toReader().toSeq(BufferedReader::readLine, skip);
+    }
+
+    default Seq<String> toSeq(int n, UnaryOperator<String> replace) {
+        return toReader().toSeq(BufferedReader::readLine, n, replace);
     }
 
     default ByteSource withCharset(Charset charset) {

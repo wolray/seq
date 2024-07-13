@@ -9,8 +9,8 @@ import java.util.function.Function;
  * @author wolray
  */
 public interface SizedSeq<T> extends ItrSeq<T> {
-    int size();
     boolean isEmpty();
+    int size();
 
     @Override
     default SizedSeq<T> cache() {
@@ -34,6 +34,10 @@ public interface SizedSeq<T> extends ItrSeq<T> {
     @Override
     default ItrSeq<T> drop(int n) {
         return n >= size() ? Collections::emptyIterator : ItrSeq.super.drop(n);
+    }
+
+    default boolean isNotEmpty() {
+        return !isEmpty();
     }
 
     @Override
@@ -78,9 +82,5 @@ public interface SizedSeq<T> extends ItrSeq<T> {
     @Override
     default ItrSeq<T> take(int n) {
         return n >= size() ? this : ItrSeq.super.take(n);
-    }
-
-    default boolean isNotEmpty() {
-        return !isEmpty();
     }
 }

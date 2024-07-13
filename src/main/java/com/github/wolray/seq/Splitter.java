@@ -9,6 +9,21 @@ import java.util.regex.Pattern;
 public interface Splitter {
     Seq<String> split(String s, int limit);
 
+    static Splitter of(String literal) {
+        return literal.length() == 1 ? of(literal.charAt(0)) :
+            literal.isEmpty() ? ofEmpty() : (s, limit) -> c -> {
+                char[] chars = s.toCharArray();
+                int left = limit, beg = 0, len = literal.length(), index;
+                for (; left > 0 && (index = s.indexOf(literal, beg)) > 0; left--) {
+                    c.accept(substring(chars, beg, index));
+                    beg = index + len;
+                }
+                if (left > 0) {
+                    c.accept(substring(chars, beg, chars.length));
+                }
+            };
+    }
+
     static Splitter of(char sep) {
         return (s, limit) -> c -> {
             char[] chars = s.toCharArray();
@@ -39,21 +54,6 @@ public interface Splitter {
                 c.accept(substring(chars, beg, chars.length));
             }
         };
-    }
-
-    static Splitter of(String literal) {
-        return literal.length() == 1 ? of(literal.charAt(0)) :
-            literal.isEmpty() ? ofEmpty() : (s, limit) -> c -> {
-                char[] chars = s.toCharArray();
-                int left = limit, beg = 0, len = literal.length(), index;
-                for (; left > 0 && (index = s.indexOf(literal, beg)) > 0; left--) {
-                    c.accept(substring(chars, beg, index));
-                    beg = index + len;
-                }
-                if (left > 0) {
-                    c.accept(substring(chars, beg, chars.length));
-                }
-            };
     }
 
     static Splitter ofEmpty() {

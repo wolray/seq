@@ -171,16 +171,16 @@ public interface Seq2<K, V> extends Seq0<BiConsumer<K, V>> {
         return toMap(new LinkedHashMap<>());
     }
 
+    default SeqMap<K, V> toMap(Map<K, V> des) {
+        return SeqMap.of(reduce(des, Map::put));
+    }
+
     default <A, B> SeqMap<A, B> toMap(BiFunction<K, V, A> toKey, BiFunction<K, V, B> toValue) {
         return toMap(new LinkedHashMap<>(), toKey, toValue);
     }
 
     default <A, B> SeqMap<A, B> toMap(Map<A, B> des, BiFunction<K, V, A> toKey, BiFunction<K, V, B> toValue) {
         return SeqMap.of(reduce(des, (res, k, v) -> res.put(toKey.apply(k, v), toValue.apply(k, v))));
-    }
-
-    default SeqMap<K, V> toMap(Map<K, V> des) {
-        return SeqMap.of(reduce(des, Map::put));
     }
 
     class Empty {

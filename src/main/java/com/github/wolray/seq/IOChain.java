@@ -17,15 +17,15 @@ public interface IOChain<T> {
         }
     }
 
-    static <T> IOChain<T> of(IOChain<T> supplier) {
-        return supplier;
-    }
-
     static IOChain<Void> of(Runnable runnable) {
         return () -> {
             runnable.run();
             return null;
         };
+    }
+
+    static <T> IOChain<T> of(IOChain<T> supplier) {
+        return supplier;
     }
 
     static <T> IOChain<T> of(T t) {
@@ -91,18 +91,10 @@ public interface IOChain<T> {
         });
     }
 
-    default <E> Seq<E> toSeq(Function<T, E> provider, int n, UnaryOperator<E> replace) {
+    default <E> Seq<E> toSeq(long limit, Function<T, E> provider) {
         return c -> use(t -> {
-            E e;
-            for (int i = 0; i < n; i++) {
-                e = provider.apply(t);
-                if (e == null) {
-                    return;
-                }
-                c.accept(replace.apply(e));
-            }
-            while ((e = provider.apply(t)) != null) {
-                c.accept(e);
+            for (long i = 0; i < limit; i++) {
+                c.accept(provider.apply(t));
             }
         });
     }
@@ -122,10 +114,18 @@ public interface IOChain<T> {
         });
     }
 
-    default <E> Seq<E> toSeq(long limit, Function<T, E> provider) {
+    default <E> Seq<E> toSeq(Function<T, E> provider, int n, UnaryOperator<E> replace) {
         return c -> use(t -> {
-            for (long i = 0; i < limit; i++) {
-                c.accept(provider.apply(t));
+            E e;
+            for (int i = 0; i < n; i++) {
+                e = provider.apply(t);
+                if (e == null) {
+                    return;
+                }
+                c.accept(replace.apply(e));
+            }
+            while ((e = provider.apply(t)) != null) {
+                c.accept(e);
             }
         });
     }

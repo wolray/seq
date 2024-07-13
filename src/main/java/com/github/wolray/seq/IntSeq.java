@@ -12,6 +12,14 @@ public interface IntSeq extends Seq0<IntConsumer> {
     IntSeq empty = c -> {};
     IntConsumer nothing = t -> {};
 
+    static IntSeq gen(IntSupplier supplier) {
+        return c -> {
+            while (true) {
+                c.accept(supplier.getAsInt());
+            }
+        };
+    }
+
     static IntSeq gen(int seed, IntUnaryOperator operator) {
         return c -> {
             int t = seed;
@@ -33,14 +41,6 @@ public interface IntSeq extends Seq0<IntConsumer> {
         };
     }
 
-    static IntSeq gen(IntSupplier supplier) {
-        return c -> {
-            while (true) {
-                c.accept(supplier.getAsInt());
-            }
-        };
-    }
-
     static IntSeq of(CharSequence cs) {
         return c -> {
             for (int i = 0; i < cs.length(); i++) {
@@ -55,6 +55,10 @@ public interface IntSeq extends Seq0<IntConsumer> {
                 c.accept(t);
             }
         };
+    }
+
+    static IntSeq range(int stop) {
+        return range(0, stop, 1);
     }
 
     static IntSeq range(int start, int stop) {
@@ -76,10 +80,6 @@ public interface IntSeq extends Seq0<IntConsumer> {
                 }
             }
         };
-    }
-
-    static IntSeq range(int stop) {
-        return range(0, stop, 1);
     }
 
     static IntSeq repeat(int n, int value) {
@@ -252,16 +252,16 @@ public interface IntSeq extends Seq0<IntConsumer> {
         });
     }
 
-    default IntSeq filter(int n, IntPredicate predicate) {
-        return c -> consume(c, n, t -> {
+    default IntSeq filter(IntPredicate predicate) {
+        return c -> consume(t -> {
             if (predicate.test(t)) {
                 c.accept(t);
             }
         });
     }
 
-    default IntSeq filter(IntPredicate predicate) {
-        return c -> consume(t -> {
+    default IntSeq filter(int n, IntPredicate predicate) {
+        return c -> consume(c, n, t -> {
             if (predicate.test(t)) {
                 c.accept(t);
             }
@@ -405,12 +405,12 @@ public interface IntSeq extends Seq0<IntConsumer> {
         return !find(predicate).isPresent();
     }
 
-    default IntSeq onEach(int n, IntConsumer consumer) {
-        return c -> consume(c, n, consumer.andThen(c));
-    }
-
     default IntSeq onEach(IntConsumer consumer) {
         return c -> consume(consumer.andThen(c));
+    }
+
+    default IntSeq onEach(int n, IntConsumer consumer) {
+        return c -> consume(c, n, consumer.andThen(c));
     }
 
     default IntSeq onEachIndexed(IndexIntConsumer consumer) {

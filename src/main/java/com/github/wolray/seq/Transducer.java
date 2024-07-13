@@ -10,10 +10,6 @@ public interface Transducer<T, V, E> {
     Reducer<T, V> reducer();
     Function<V, E> transformer();
 
-    static <T, V, E> Transducer<T, V, E> of(Collector<T, V, E> collector) {
-        return of(Reducer.of(collector.supplier(), collector.accumulator()), collector.finisher());
-    }
-
     static <T> Transducer<T, ?, T> of(BinaryOperator<T> binaryOperator) {
         return of(() -> new Mutable<T>(null), (m, t) -> {
             if (m.isSet) {
@@ -22,6 +18,10 @@ public interface Transducer<T, V, E> {
                 m.set(t);
             }
         }, Mutable::get);
+    }
+
+    static <T, V, E> Transducer<T, V, E> of(Collector<T, V, E> collector) {
+        return of(Reducer.of(collector.supplier(), collector.accumulator()), collector.finisher());
     }
 
     static <T, V, E> Transducer<T, V, E> of(Reducer<T, V> reducer, Function<V, E> transformer) {
