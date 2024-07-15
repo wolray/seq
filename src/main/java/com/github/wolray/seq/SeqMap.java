@@ -10,36 +10,10 @@ import java.util.function.Function;
  * @author wolray
  */
 public interface SeqMap<K, V> extends Seq2<K, V>, Map<K, V> {
+    <A, B> SeqMap<A, B> newForMapping();
+    SeqSet<Entry<K, V>> seqEntrySet();
     SeqSet<K> seqKeySet();
     SeqCollection<V> seqValues();
-    SeqSet<Entry<K, V>> seqEntrySet();
-    <A, B> SeqMap<A, B> newForMapping();
-
-    @Override
-    default void consume(BiConsumer<K, V> consumer) {
-        forEach(consumer);
-    }
-
-    default <E> SeqMap<E, V> mapByKey(BiFunction<K, V, E> function) {
-        return toMap(newForMapping(), function, (k, v) -> v);
-    }
-
-    default <E> SeqMap<E, V> mapByKey(Function<K, E> function) {
-        return toMap(newForMapping(), (k, v) -> function.apply(k), (k, v) -> v);
-    }
-
-    default <E> SeqMap<K, E> mapByValue(BiFunction<K, V, E> function) {
-        return toMap(newForMapping(), (k, v) -> k, function);
-    }
-
-    default <E> SeqMap<K, E> mapByValue(Function<V, E> function) {
-        return toMap(newForMapping(), (k, v) -> k, (k, v) -> function.apply(v));
-    }
-
-    @Override
-    default SeqMap<K, V> toMap() {
-        return this;
-    }
 
     static <K, V> SeqMap<K, V> hash() {
         return new LinkedSeqMap<>();
@@ -57,8 +31,29 @@ public interface SeqMap<K, V> extends Seq2<K, V>, Map<K, V> {
         return new Proxy<>(new TreeMap<>(comparator));
     }
 
+    @Override
+    default void consume(BiConsumer<K, V> consumer) {
+        forEach(consumer);
+    }
+
     default boolean isNotEmpty() {
         return !isEmpty();
+    }
+
+    default <E> SeqMap<E, V> mapByKey(BiFunction<K, V, E> function) {
+        return toMap(newForMapping(), function, (k, v) -> v);
+    }
+
+    default <E> SeqMap<E, V> mapByKey(Function<K, E> function) {
+        return toMap(newForMapping(), (k, v) -> function.apply(k), (k, v) -> v);
+    }
+
+    default <E> SeqMap<K, E> mapByValue(BiFunction<K, V, E> function) {
+        return toMap(newForMapping(), (k, v) -> k, function);
+    }
+
+    default <E> SeqMap<K, E> mapByValue(Function<V, E> function) {
+        return toMap(newForMapping(), (k, v) -> k, (k, v) -> function.apply(v));
     }
 
     @SuppressWarnings("unchecked")
@@ -97,6 +92,11 @@ public interface SeqMap<K, V> extends Seq2<K, V>, Map<K, V> {
 
     default ArraySeq<Entry<K, V>> sortDescByValue(Comparator<V> comparator) {
         return seqEntrySet().sortWithDesc(Entry.comparingByValue(comparator));
+    }
+
+    @Override
+    default SeqMap<K, V> toMap() {
+        return this;
     }
 
     class Proxy<K, V> implements SeqMap<K, V> {

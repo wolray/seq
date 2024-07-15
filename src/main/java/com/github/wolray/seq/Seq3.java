@@ -47,8 +47,8 @@ public interface Seq3<A, B, C> extends Seq0<Consumer3<A, B, C>> {
         return cs -> consume((a, b, c) -> cs.accept(c));
     }
 
-    default <T> Seq<T> map(Function3<A, B, C, T> function) {
-        return cs -> consume((a, b, c) -> cs.accept(function.apply(a, b, c)));
+    default <T> Seq<T> map(Function3<A, B, C, T> function3) {
+        return cs -> consume((a, b, c) -> cs.accept(function3.apply(a, b, c)));
     }
 
     default <T> Seq3<T, B, C> mapFirst(Function3<A, B, C, T> function) {
@@ -59,20 +59,20 @@ public interface Seq3<A, B, C> extends Seq0<Consumer3<A, B, C>> {
         return cs -> consume((a, b, c) -> cs.accept(function.apply(a), b, c));
     }
 
-    default <T> Seq3<A, T, C> mapSecond(Function3<A, B, C, T> function) {
-        return cs -> consume((a, b, c) -> cs.accept(a, function.apply(a, b, c), c));
-    }
-
     default <T> Seq3<A, T, C> mapSecond(Function<B, T> function) {
         return cs -> consume((a, b, c) -> cs.accept(a, function.apply(b), c));
     }
 
-    default <T> Seq3<A, B, T> mapThird(Function3<A, B, C, T> function) {
-        return cs -> consume((a, b, c) -> cs.accept(a, b, function.apply(a, b, c)));
+    default <T> Seq3<A, T, C> mapSecond(Function3<A, B, C, T> function3) {
+        return cs -> consume((a, b, c) -> cs.accept(a, function3.apply(a, b, c), c));
     }
 
     default <T> Seq3<A, B, T> mapThird(Function<C, T> function) {
         return cs -> consume((a, b, c) -> cs.accept(a, b, function.apply(c)));
+    }
+
+    default <T> Seq3<A, B, T> mapThird(Function3<A, B, C, T> function3) {
+        return cs -> consume((a, b, c) -> cs.accept(a, b, function3.apply(a, b, c)));
     }
 
     default Seq<Triple<A, B, C>> tripled() {

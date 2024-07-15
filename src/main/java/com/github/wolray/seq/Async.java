@@ -56,10 +56,6 @@ public interface Async {
         };
     }
 
-    static Async of(ForkJoinPool forkJoinPool) {
-        return new ForkJoin(forkJoinPool);
-    }
-
     static Async of(ThreadFactory factory) {
         return new Async() {
             @Override
@@ -85,6 +81,10 @@ public interface Async {
                 apply(latch::wait);
             }
         };
+    }
+
+    static Async of(ForkJoinPool forkJoinPool) {
+        return new ForkJoin(forkJoinPool);
     }
 
     static <T> Seq<T> sourceOf(Seq<T> seq) {

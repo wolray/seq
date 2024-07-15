@@ -15,8 +15,8 @@ public interface Seq<T> extends Seq0<Consumer<T>> {
         return (Seq<T>)Empty.emptySeq;
     }
 
-    static <T> Seq<T> flat(Seq<Optional<T>> seq) {
-        return c -> seq.consume(o -> o.ifPresent(c));
+    static <T> Seq<T> flat(Seq<Optional<T>> optionalSeq) {
+        return c -> optionalSeq.consume(o -> o.ifPresent(c));
     }
 
     @SafeVarargs
