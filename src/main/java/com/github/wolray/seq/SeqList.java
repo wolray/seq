@@ -1,70 +1,51 @@
 package com.github.wolray.seq;
 
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
-import java.util.ListIterator;
+import java.util.function.Predicate;
 
 /**
  * @author wolray
  */
-public interface SeqList<T> extends SizedSeq<T>, List<T> {
-    static <T> SeqList<T> of(List<T> list) {
-        return list instanceof SeqList ? (SeqList<T>)list : new Proxy<>(list);
+public class SeqList<T> extends ArrayList<T> implements ItrSeq<T> {
+    public SeqList(int initialCapacity) {
+        super(initialCapacity);
     }
 
-    class Proxy<T> extends SeqCollection.Proxy<T, List<T>> implements SeqList<T> {
-        public Proxy(List<T> backer) {
-            super(backer);
-        }
+    public SeqList() {}
 
-        @Override
-        public boolean addAll(int index, Collection<? extends T> c) {
-            return backer.addAll(c);
-        }
+    public SeqList(Collection<? extends T> c) {
+        super(c);
+    }
 
-        @Override
-        public T get(int index) {
-            return backer.get(index);
-        }
+    @Override
+    public int sizeOrDefault() {
+        return size();
+    }
 
-        @Override
-        public T set(int index, T element) {
-            return backer.set(index, element);
-        }
+    public void swap(int i, int j) {
+        T t = get(i);
+        set(i, get(j));
+        set(j, t);
+    }
 
-        @Override
-        public void add(int index, T element) {
-            backer.add(index, element);
-        }
+    public Seq<SeqList<T>> permute(boolean inplace) {
+        return p -> permute(p, inplace, 0);
+    }
 
-        @Override
-        public T remove(int index) {
-            return backer.remove(index);
+    private boolean permute(Predicate<SeqList<T>> p, boolean inplace, int i) {
+        int n = size();
+        if (i == n) {
+            return p.test(inplace ? this : new SeqList<>(this));
         }
-
-        @Override
-        public int indexOf(Object o) {
-            return backer.indexOf(o);
+        for (int j = i; j < n; j++) {
+            swap(i, j);
+            if (permute(p, inplace, i + 1)) {
+                swap(i, j);
+                return true;
+            }
+            swap(i, j);
         }
-
-        @Override
-        public int lastIndexOf(Object o) {
-            return backer.lastIndexOf(o);
-        }
-
-        @Override
-        public ListIterator<T> listIterator() {
-            return backer.listIterator();
-        }
-
-        @Override
-        public ListIterator<T> listIterator(int index) {
-            return backer.listIterator(index);
-        }
-
-        @Override
-        public List<T> subList(int fromIndex, int toIndex) {
-            return backer.subList(fromIndex, toIndex);
-        }
+        return false;
     }
 }

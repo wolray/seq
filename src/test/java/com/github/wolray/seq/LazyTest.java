@@ -33,7 +33,7 @@ public class LazyTest {
         private Lazy<Long> start = Lazy.of(System::currentTimeMillis);
 
         String log(long seconds, String value) {
-            Async.delay(seconds * 1000);
+            Async.sleep(seconds * 1000);
             System.out.printf("[%s] %s at %d\n", Thread.currentThread().getName(), value, System.currentTimeMillis() - start.get());
             return value;
         }

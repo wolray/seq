@@ -1,10 +1,7 @@
 package com.github.wolray.seq;
 
-import java.util.ArrayList;
-import java.util.Objects;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * @author wolray
@@ -24,14 +21,6 @@ public interface Async {
 
     static Async common() {
         return of(ForkJoinPool.commonPool());
-    }
-
-    static void delay(long time) {
-        try {
-            Thread.sleep(time);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     static Async of(ExecutorService executor) {
@@ -72,7 +61,7 @@ public interface Async {
 
             @Override
             public void joinAll(Seq<Runnable> tasks) {
-                ArraySeq<Runnable> list = tasks.toList();
+                SeqList<Runnable> list = tasks.toList();
                 CountDownLatch latch = new CountDownLatch(list.size());
                 list.consume(r -> factory.newThread(() -> {
                     r.run();
@@ -87,6 +76,14 @@ public interface Async {
         return new ForkJoin(forkJoinPool);
     }
 
+    static void sleep(long time) {
+        try {
+            Thread.sleep(time);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     static <T> Seq<T> sourceOf(Seq<T> seq) {
         return seq instanceof AsyncSeq ? ((AsyncSeq<T>)seq).source : seq;
     }
@@ -94,146 +91,12 @@ public interface Async {
     default <T> AsyncSeq<T> toAsync(Seq<T> seq) {
         return new AsyncSeq<T>(this, sourceOf(seq)) {
             @Override
-            public void consume(Consumer<T> consumer) {
+            public boolean until(Predicate<T> stop) {
                 checkState();
-                task = submit(() -> source.consumeTillStop(t -> {
-                    if (cancelled) {
-                        Seq.stop();
-                    }
-                    consumer.accept(t);
-                }));
+                task = submit(() -> source.until(t -> cancelled || stop.test(t)));
+                return false;
             }
         };
-    }
-
-    default <T> AsyncSeq<T> toChannel(Seq<T> seq) {
-        return new AsyncSeq<T>(this, sourceOf(seq)) {
-            @Override
-            public void consume(Consumer<T> consumer) {
-                checkState();
-                HotChannel<T> channel = new HotChannel<>();
-                task = submit(() -> {
-                    source.consumeTillStop(t -> {
-                        if (cancelled) {
-                            Seq.stop();
-                        }
-                        if (channel.isEmpty()) {
-                            channel.offer(t);
-                            channel.easyNotify();
-                        } else {
-                            consumer.accept(t);
-                        }
-                    });
-                    channel.stop = true;
-                    channel.easyNotify();
-                });
-                while (true) {
-                    while (!channel.isEmpty()) {
-                        consumer.accept(channel.poll());
-                    }
-                    if (channel.stop) {
-                        break;
-                    }
-                    channel.easyWait();
-                }
-            }
-        };
-    }
-
-    default <T> Seq<T> toShared(int buffer, boolean delay, Seq<T> seq) {
-        ForkJoin.checkForHot(this);
-        Seq<T> source = sourceOf(seq);
-        SharedArray<T> array = new SharedArray<>(buffer);
-        Runnable emit = () -> {
-            source.consume(t -> {
-                if (array.end < buffer) {
-                    array.add(t);
-                    array.end += 1;
-                } else {
-                    array.set(array.head, t);
-                    if (++array.head == buffer) {
-                        array.head = 0;
-                    }
-                    array.drop += 1;
-                }
-                array.easyNotify();
-            });
-            array.stop = true;
-            array.easyNotify();
-        };
-        AtomicReference<Object> task = new AtomicReference<>(null);
-        if (!delay) {
-            task.set(submit(emit));
-        }
-        return c -> {
-            if (delay) {
-                task.getAndUpdate(o -> o != null ? o : submit(emit));
-            }
-            submit(() -> {
-                for (long i = array.drop; ; i++) {
-                    if (array.stop) {
-                        return;
-                    }
-                    if (i < array.drop) {
-                        c.accept(array.get(array.head));
-                        i = array.drop;
-                    } else {
-                        if (i - array.drop >= array.size()) {
-                            array.easyWait();
-                        }
-                        c.accept(array.get((int)((array.head + i - array.drop) % buffer)));
-                    }
-                }
-            });
-        };
-    }
-
-    default <T> Seq<T> toState(boolean delay, Seq<T> seq) {
-        ForkJoin.checkForHot(this);
-        Seq<T> source = sourceOf(seq);
-        StateValue<T> value = new StateValue<>();
-        Runnable emit = () -> {
-            source.consume(t -> {
-                if (!Objects.equals(t, value.it)) {
-                    value.it = t;
-                    value.easyNotify();
-                }
-            });
-            value.stop = true;
-            value.easyNotify();
-        };
-        AtomicReference<Object> task = new AtomicReference<>(null);
-        if (!delay) {
-            task.set(submit(emit));
-        }
-        return c -> {
-            if (delay) {
-                task.getAndUpdate(o -> o != null ? o : submit(emit));
-            }
-            submit(() -> {
-                while (true) {
-                    value.easyWait();
-                    if (value.stop) {
-                        return;
-                    }
-                    c.accept(value.it);
-                }
-            });
-        };
-    }
-
-    interface EasyLock {
-        default void easyNotify() {
-            synchronized (this) {
-                notify();
-            }
-        }
-
-        default void easyWait() {
-            synchronized (this) {
-                apply(this::wait);
-            }
-        }
     }
 
     interface ThreadRunnable {
@@ -245,12 +108,6 @@ public interface Async {
 
         public ForkJoin(ForkJoinPool forkJoinPool) {
             this.forkJoinPool = forkJoinPool;
-        }
-
-        static void checkForHot(Async async) {
-            if (async instanceof ForkJoin) {
-                throw new IllegalArgumentException("do not use ForkJoinPool for shareIn or stateIn");
-            }
         }
 
         @Override
@@ -267,21 +124,5 @@ public interface Async {
         public void joinAll(Seq<Runnable> tasks) {
             tasks.map(forkJoinPool::submit).cache().consume(ForkJoinTask::join);
         }
-    }
-
-    class SharedArray<T> extends ArrayList<T> implements EasyLock {
-        int head;
-        int end;
-        long drop;
-        boolean stop;
-
-        SharedArray(int buffer) {
-            super(buffer);
-        }
-    }
-
-    class StateValue<T> implements EasyLock {
-        T it;
-        boolean stop;
     }
 }

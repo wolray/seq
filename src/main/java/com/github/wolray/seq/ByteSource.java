@@ -5,55 +5,13 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.Charset;
 import java.nio.file.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Properties;
-import java.util.function.UnaryOperator;
+import java.util.*;
+import java.util.function.Supplier;
 
 /**
  * @author wolray
  */
 public interface ByteSource extends IOChain.Closable<InputStream> {
-    static ByteSource of(InputStream is) {
-        return () -> is;
-    }
-
-    static ByteSource of(URL url) {
-        return url::openStream;
-    }
-
-    static ByteSource of(File file) {
-        return of(file.toPath());
-    }
-
-    static ByteSource of(Path path) {
-        return new ByteSource() {
-            @Override
-            public InputStream call() throws IOException {
-                return Files.newInputStream(path);
-            }
-
-            @Override
-            public byte[] toBytes() {
-                return IOChain.apply(path, Files::readAllBytes);
-            }
-
-            @Override
-            public Path write(Path target) {
-                if (!path.equals(target)) {
-                    IOChain.apply(path, p -> Files.copy(p, target, StandardCopyOption.REPLACE_EXISTING));
-                }
-                return target;
-            }
-
-            @Override
-            public IOChain<BufferedReader> toReader() {
-                return (Closable<BufferedReader>)() -> Files.newBufferedReader(path, charset());
-            }
-        };
-    }
-
     static ByteSource of(byte[] bytes) {
         return new ByteSource() {
             @Override
@@ -73,12 +31,55 @@ public interface ByteSource extends IOChain.Closable<InputStream> {
         };
     }
 
+    static ByteSource of(File file) {
+        return of(file.toPath());
+    }
+
+    static ByteSource of(Supplier<InputStream> is) {
+        return is::get;
+    }
+
     static ByteSource of(Iterable<String> iterable) {
         return of(iterable, "\n");
     }
 
-    static ByteSource of(Iterable<String> iterable, String separator) {
-        return () -> ItrUtil.toInputStream(iterable.iterator(), separator);
+    static ByteSource of(Path path) {
+        return new ByteSource() {
+            @Override
+            public InputStream call() throws IOException {
+                return Files.newInputStream(path);
+            }
+
+            @Override
+            public byte[] toBytes() {
+                return IOChain.apply(path, Files::readAllBytes);
+            }
+
+            @Override
+            public Path write(Path target) {
+                if (!path.equals(target)) {
+                    try {
+                        Files.copy(path, target, StandardCopyOption.REPLACE_EXISTING);
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                }
+                return target;
+            }
+
+            @Override
+            public IOChain<BufferedReader> toReader() {
+                return (Closable<BufferedReader>)() -> Files.newBufferedReader(path, charset());
+            }
+        };
+    }
+
+    static ByteSource of(URL url) {
+        return url::openStream;
+    }
+
+    static ByteSource of(Iterable<String> iterable, String sep) {
+        return () -> toInputStream(iterable.iterator(), sep);
     }
 
     static ByteSource ofArray(IOChain<byte[]> bytes) {
@@ -87,10 +88,6 @@ public interface ByteSource extends IOChain.Closable<InputStream> {
 
     static ByteSource ofPath(IOChain<Path> path) {
         return of(path.get());
-    }
-
-    static ByteSource ofResource(String resource) {
-        return ofResource(ByteSource.class, resource);
     }
 
     static ByteSource ofResource(Class<?> cls, String resource) {
@@ -112,6 +109,10 @@ public interface ByteSource extends IOChain.Closable<InputStream> {
 
     static ByteSource ofUrl(String url) {
         return IOChain.apply(url, u -> of(new URL(u)));
+    }
+
+    static InputStream toInputStream(Iterator<String> iterator, String sep) {
+        return new InputPuller(iterator, sep);
     }
 
     default String asString() {
@@ -150,6 +151,10 @@ public interface ByteSource extends IOChain.Closable<InputStream> {
         return res;
     }
 
+    default Seq<String> toLines() {
+        return toReader().toSeq(BufferedReader::readLine);
+    }
+
     default IOChain<Properties> toProperties() {
         return toReader().map(r -> {
             Properties p = new Properties();
@@ -160,18 +165,6 @@ public interface ByteSource extends IOChain.Closable<InputStream> {
 
     default IOChain<BufferedReader> toReader() {
         return mapClosable(is -> new BufferedReader(new InputStreamReader(is, charset())));
-    }
-
-    default Seq<String> toSeq() {
-        return toReader().toSeq(BufferedReader::readLine);
-    }
-
-    default Seq<String> toSeq(int skip) {
-        return toReader().toSeq(BufferedReader::readLine, skip);
-    }
-
-    default Seq<String> toSeq(int n, UnaryOperator<String> replace) {
-        return toReader().toSeq(BufferedReader::readLine, n, replace);
     }
 
     default ByteSource withCharset(Charset charset) {
@@ -206,5 +199,65 @@ public interface ByteSource extends IOChain.Closable<InputStream> {
 
     default Path writeTemp(String suffix) {
         return IOChain.of(() -> write(Files.createTempFile("", suffix))).get();
+    }
+
+    class InputPuller extends InputStream {
+        final Puller<byte[]> puller;
+        byte[] cur = {};
+        int i;
+
+        public InputPuller(Iterator<String> source, String sep) {
+            Puller<byte[]> bytesPuller = Puller.map(source, String::getBytes);
+            puller = sep.isEmpty() ? bytesPuller : Puller.zip(bytesPuller, sep.getBytes());
+        }
+
+        @Override
+        public int read() {
+            if (i < cur.length) {
+                return cur[i++] & 0xFF;
+            }
+            i = 0;
+            while (puller.hasNext()) {
+                cur = puller.next;
+                if (cur.length > 0) {
+                    return cur[i++] & 0xFF;
+                }
+            }
+            return -1;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) {
+            int srcRest = cur.length - i;
+            if (srcRest >= len) {
+                System.arraycopy(cur, i, b, off, len);
+                i += len;
+                return len;
+            } else {
+                int count = 0;
+                if (srcRest > 0) {
+                    System.arraycopy(cur, i, b, off, srcRest);
+                    off += srcRest;
+                    count += srcRest;
+                    i = cur.length;
+                }
+                while (count < len && puller.hasNext()) {
+                    byte[] bytes = puller.next;
+                    if (bytes.length > 0) {
+                        int desRest = len - count;
+                        if (bytes.length >= desRest) {
+                            System.arraycopy(cur = bytes, 0, b, off, desRest);
+                            i = desRest;
+                            count = len;
+                        } else {
+                            System.arraycopy(bytes, 0, b, off, bytes.length);
+                            off += bytes.length;
+                            count += bytes.length;
+                        }
+                    }
+                }
+                return count > 0 ? count : -1;
+            }
+        }
     }
 }

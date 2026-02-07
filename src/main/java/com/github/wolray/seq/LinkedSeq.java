@@ -6,10 +6,15 @@ import java.util.LinkedList;
 /**
  * @author wolray
  */
-public class LinkedSeq<T> extends LinkedList<T> implements SeqList<T>, SeqQueue<T> {
+public class LinkedSeq<T> extends LinkedList<T> implements ItrSeq<T> {
     public LinkedSeq() {}
 
     public LinkedSeq(Collection<? extends T> c) {
         super(c);
+    }
+
+    @Override
+    public int sizeOrDefault() {
+        return size();
     }
 }

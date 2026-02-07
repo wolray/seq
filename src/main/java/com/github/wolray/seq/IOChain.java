@@ -1,7 +1,6 @@
 package com.github.wolray.seq;
 
 import java.io.*;
-import java.util.function.UnaryOperator;
 
 /**
  * @author wolray
@@ -46,14 +45,6 @@ public interface IOChain<T> {
         };
     }
 
-    default <E> E apply(Function<T, E> function) {
-        try {
-            return function.apply(call());
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
     default Lazy<T> asLazy() {
         return Lazy.of(this::get);
     }
@@ -83,62 +74,22 @@ public interface IOChain<T> {
     }
 
     default <E> Seq<E> toSeq(Function<T, E> provider) {
-        return c -> use(t -> {
-            E e;
-            while ((e = provider.apply(t)) != null) {
-                c.accept(e);
-            }
-        });
-    }
-
-    default <E> Seq<E> toSeq(long limit, Function<T, E> provider) {
-        return c -> use(t -> {
-            for (long i = 0; i < limit; i++) {
-                c.accept(provider.apply(t));
-            }
-        });
-    }
-
-    default <E> Seq<E> toSeq(Function<T, E> provider, int skip) {
-        return c -> use(t -> {
-            E e;
-            for (int i = 0; i < skip; i++) {
-                e = provider.apply(t);
-                if (e == null) {
-                    return;
+        return p -> {
+            use(t -> {
+                while (true) {
+                    E e = provider.apply(t);
+                    if (e == null || p.test(e)) {
+                        return;
+                    }
                 }
-            }
-            while ((e = provider.apply(t)) != null) {
-                c.accept(e);
-            }
-        });
-    }
-
-    default <E> Seq<E> toSeq(Function<T, E> provider, int n, UnaryOperator<E> replace) {
-        return c -> use(t -> {
-            E e;
-            for (int i = 0; i < n; i++) {
-                e = provider.apply(t);
-                if (e == null) {
-                    return;
-                }
-                c.accept(replace.apply(e));
-            }
-            while ((e = provider.apply(t)) != null) {
-                c.accept(e);
-            }
-        });
+            });
+            return true;
+        };
     }
 
     default void use(Consumer<T> consumer) {
-        useAndGet(consumer);
-    }
-
-    default T useAndGet(Consumer<T> consumer) {
         try {
-            T t = call();
-            consumer.accept(t);
-            return t;
+            consumer.accept(call());
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

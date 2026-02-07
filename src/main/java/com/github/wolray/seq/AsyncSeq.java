@@ -1,7 +1,7 @@
 package com.github.wolray.seq;
 
-import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * @author wolray
@@ -19,10 +19,10 @@ public abstract class AsyncSeq<T> implements Seq<T> {
 
     public void cancel() {
         cancelled = true;
-        joinConsume();
+        joinTask();
     }
 
-    public void joinConsume() {
+    public void joinTask() {
         if (task != null) {
             async.join(task);
         }
@@ -37,9 +37,9 @@ public abstract class AsyncSeq<T> implements Seq<T> {
     public AsyncSeq<T> onStart(Runnable runnable) {
         return new AsyncSeq<T>(async, source) {
             @Override
-            public void consume(Consumer<T> consumer) {
+            public boolean until(Predicate<T> stop) {
                 runnable.run();
-                AsyncSeq.this.consume(consumer);
+                return source.until(stop);
             }
         };
     }
@@ -47,9 +47,10 @@ public abstract class AsyncSeq<T> implements Seq<T> {
     public AsyncSeq<T> onCompletion(Runnable runnable) {
         return new AsyncSeq<T>(async, source) {
             @Override
-            public void consume(Consumer<T> consumer) {
-                AsyncSeq.this.consume(consumer);
+            public boolean until(Predicate<T> stop) {
+                boolean flag = source.until(stop);
                 runnable.run();
+                return flag;
             }
         };
     }
@@ -58,8 +59,8 @@ public abstract class AsyncSeq<T> implements Seq<T> {
     public <E> AsyncSeq<E> map(Function<T, E> function) {
         return new AsyncSeq<E>(async, source.map(function)) {
             @Override
-            public void consume(Consumer<E> consumer) {
-                AsyncSeq.this.consume(t -> consumer.accept(function.apply(t)));
+            public boolean until(Predicate<E> stop) {
+                return source.until(stop);
             }
         };
     }

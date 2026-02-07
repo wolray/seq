@@ -2,8 +2,7 @@ package com.github.wolray.seq;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -23,54 +22,53 @@ public interface SeqExpand<T> extends Function<T, Seq<T>> {
         return t -> apply(t).filter(predicate.negate());
     }
 
-    default void scan(BiConsumer<T, ArraySeq<T>> c, T node) {
-        ArraySeq<T> sub = apply(node).filterNotNull().toList();
-        c.accept(node, sub);
-        sub.consume(n -> scan(c, n));
+    default boolean scan(BiPredicate<T, SeqList<T>> p, T node) {
+        SeqList<T> sub = apply(node).filterNotNull().toList();
+        return p.test(node, sub) || sub.until(n -> scan(p, n));
     }
 
-    default void scan(Consumer<T> c, T node) {
-        c.accept(node);
-        apply(node).consume(n -> {
-            if (n != null) {
-                scan(c, n);
-            }
-        });
+    default boolean scan(Predicate<T> p, T node) {
+        return p.test(node) || apply(node).until(n -> n != null && scan(p, n));
     }
 
-    default void scan(Consumer<T> c, T node, int maxDepth, int depth) {
-        c.accept(node);
-        if (depth < maxDepth) {
-            apply(node).consume(n -> {
-                if (n != null) {
-                    scan(c, n, maxDepth, depth + 1);
-                }
-            });
+    default boolean scan(Predicate<T> p, T node, int maxDepth, int depth) {
+        if (p.test(node)) {
+            return true;
         }
+        if (depth < maxDepth) {
+            return apply(node).until(n -> n != null && scan(p, n, maxDepth, depth + 1));
+        }
+        return false;
     }
 
     default SeqExpand<T> terminate(Predicate<T> predicate) {
         return t -> predicate.test(t) ? Seq.empty() : apply(t);
     }
 
-    default Map<T, ArraySeq<T>> toDAG(T node) {
-        Map<T, ArraySeq<T>> map = new HashMap<>();
-        terminate(map::containsKey).scan(map::putIfAbsent, node);
+    default Map<T, SeqList<T>> toDAG(T node) {
+        Map<T, SeqList<T>> map = new HashMap<>();
+        terminate(map::containsKey).scan((t, ls) -> {
+            map.putIfAbsent(t, ls);
+            return false;
+        }, node);
         return map;
     }
 
-    default Map<T, ArraySeq<T>> toDAG(Seq<T> nodes) {
-        Map<T, ArraySeq<T>> map = new HashMap<>();
+    default Map<T, SeqList<T>> toDAG(Seq<T> nodes) {
+        Map<T, SeqList<T>> map = new HashMap<>();
         SeqExpand<T> expand = terminate(map::containsKey);
-        nodes.consume(t -> expand.scan(map::putIfAbsent, t));
+        nodes.until(t -> expand.scan((tt, ls) -> {
+            map.putIfAbsent(tt, ls);
+            return false;
+        }, t));
         return map;
     }
 
     default Seq<T> toSeq(T node) {
-        return c -> scan(c, node);
+        return p -> scan(p, node);
     }
 
     default Seq<T> toSeq(T node, int maxDepth) {
-        return c -> scan(c, node, maxDepth, 0);
+        return p -> scan(p, node, maxDepth, 0);
     }
 }

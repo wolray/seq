@@ -10,10 +10,6 @@ import java.util.function.*;
 public interface Lazy<T> extends Supplier<T> {
     T forkJoin(ForkJoinPool pool);
 
-    static <T> Lazy<T> of(Seq<T> seq) {
-        return seq.lazyLast();
-    }
-
     static <T> Lazy<T> of(Supplier<T> supplier) {
         if (supplier instanceof Lazy) {
             return (Lazy<T>)supplier;

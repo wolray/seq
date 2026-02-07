@@ -20,20 +20,25 @@ import java.util.Map;
 public class SeqClassesTest {
     public static final SeqExpand<Class<?>> CLASS_EXPAND = cls -> Seq.of(cls.getInterfaces()).append(cls.getSuperclass());
 
-    public static Graph graph(Map<Class<?>, ArraySeq<Class<?>>> map) {
-        Map<Class<?>, Pair<Class<?>, Node>> nodeMap = SeqMap.of(map).mapByValue((cls, parents) -> {
+    public static Graph graph(Map<Class<?>, SeqList<Class<?>>> map) {
+        Map<Class<?>, Pair<Class<?>, Node>> nodeMap = new SeqMap<>(map).mapValues((cls, parents) -> {
             Node nd = Factory.node(cls.getSimpleName());
             if (!cls.isInterface()) {
                 nd = nd.with(Shape.BOX);
             }
             return new Pair<>(cls, nd);
         });
-        Seq<LinkSource> linkSources = c -> nodeMap.forEach((name, pair) -> {
-            Node curr = pair.second;
-            for (Class<?> parent : map.get(pair.first)) {
-                c.accept(nodeMap.get(parent).second.link(curr));
+        Seq<LinkSource> linkSources = p -> {
+            for (Pair<Class<?>, Node> value : nodeMap.values()) {
+                Node curr = value.second;
+                for (Class<?> parent : map.get(value.first)) {
+                    if (p.test(nodeMap.get(parent).second.link(curr))) {
+                        return true;
+                    }
+                }
             }
-        });
+            return false;
+        };
         return Factory.graph("Classes").directed()
             .graphAttr().with(Rank.dir(Rank.RankDir.LEFT_TO_RIGHT))
             .nodeAttr().with(Font.name("Consolas"))
@@ -43,11 +48,11 @@ public class SeqClassesTest {
 
     @Test
     public void testClasses() {
-        Seq<Class<?>> ignore = Seq.of(Seq0.class, Object.class);
-        Map<Class<?>, ArraySeq<Class<?>>> map = CLASS_EXPAND
+        Seq<Class<?>> ignore = Seq.of(Seq.class, Object.class);
+        Map<Class<?>, SeqList<Class<?>>> map = CLASS_EXPAND
             .filterNot(ignore.toSet()::contains)
             .terminate(cls -> cls.getName().startsWith("java"))
-            .toDAG(Seq.of(ArraySeq.class, LinkedSeq.class, ConcurrentSeq.class, LinkedSeqSet.class, BatchedSeq.class));
+            .toDAG(Seq.of(SeqList.class, LinkedSeq.class, ConcurrentSeq.class, SeqSet.class, BatchedSeq.class));
         Graph graph = graph(map);
         IOChain.apply(String.format("src/test/resources/%s.svg", "seq-classes"),
             s -> Graphviz.fromGraph(graph).render(Format.SVG).toFile(new File(s)));
@@ -55,11 +60,11 @@ public class SeqClassesTest {
 
     @Test
     public void testSeqMap() {
-        Seq<Class<?>> ignore = Seq.of(Seq0.class);
-        Map<Class<?>, ArraySeq<Class<?>>> map = CLASS_EXPAND
+        Seq<Class<?>> ignore = Seq.of(Seq.class);
+        Map<Class<?>, SeqList<Class<?>>> map = CLASS_EXPAND
             .filterNot(ignore.toSet()::contains)
             .terminate(cls -> cls.getName().startsWith("java"))
-            .toDAG(Seq.of(LinkedSeqMap.class));
+            .toDAG(Seq.of(SeqMap.class));
         Graph graph = graph(map);
         IOChain.apply(String.format("src/test/resources/%s.svg", "seq-map"),
             s -> Graphviz.fromGraph(graph).render(Format.SVG).toFile(new File(s)));

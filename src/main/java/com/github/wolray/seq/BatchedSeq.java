@@ -5,51 +5,43 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * @author wolray
  */
-public class BatchedSeq<T> implements SizedSeq<T> {
+public class BatchedSeq<T> implements ItrSeq<T> {
     private transient int batchSize = 10;
     private transient final LinkedList<ArrayList<T>> list = new LinkedList<>();
     private transient int size;
     private transient ArrayList<T> cur;
 
     @Override
-    public void consume(Consumer<T> consumer) {
-        list.forEach(ls -> ls.forEach(consumer));
+    public boolean until(Predicate<T> stop) {
+        for (ArrayList<T> ts : list) {
+            for (T t : ts) {
+                if (stop.test(t)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     @Override
     public Iterator<T> iterator() {
-        return new Iterator<T>() {
-            Iterator<ArrayList<T>> iterator = list.iterator();
-            Iterator<T> cur = Collections.emptyIterator();
-
-            @Override
-            public boolean hasNext() {
-                if (!cur.hasNext()) {
-                    if (!iterator.hasNext()) {
-                        return false;
-                    }
-                    cur = iterator.next().iterator();
-                }
-                return true;
-            }
-
-            @Override
-            public T next() {
-                return cur.next();
-            }
-        };
+        return Puller.flatIterable(Seq.of(list));
     }
 
     @Override
+    public int sizeOrDefault() {
+        return size;
+    }
+
     public int size() {
         return size;
     }
 
-    @Override
     public boolean isEmpty() {
         return size == 0;
     }

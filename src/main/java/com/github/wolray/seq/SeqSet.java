@@ -1,18 +1,19 @@
 package com.github.wolray.seq;
 
-import java.util.Set;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 
 /**
  * @author wolray
  */
-public interface SeqSet<T> extends SizedSeq<T>, Set<T> {
-    static <T> SeqSet<T> of(Set<T> set) {
-        return set instanceof SeqSet ? (SeqSet<T>)set : new Proxy<>(set);
+public class SeqSet<T> extends LinkedHashSet<T> implements ItrSeq<T> {
+    public SeqSet(int initialCapacity) {
+        super(initialCapacity);
     }
 
-    class Proxy<T> extends SeqCollection.Proxy<T, Set<T>> implements SeqSet<T> {
-        public Proxy(Set<T> backer) {
-            super(backer);
-        }
+    public SeqSet() {}
+
+    public SeqSet(Collection<? extends T> c) {
+        super(c);
     }
 }
