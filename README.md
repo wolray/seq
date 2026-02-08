@@ -18,7 +18,7 @@
 <dependency>
     <groupId>io.github.wolray</groupId>
     <artifactId>seq</artifactId>
-    <version>1.0.2</version>
+    <version>2.0.0</version>
 </dependency>
 ```
 
@@ -27,6 +27,15 @@
 可使用中文直接提issue，也可添加微信radiumlei2010进群，方便大家沟通，收集反馈。
 
 ## 发布记录
+
+#### 2.0.0 (20260207)
+
+进行了完全重构，原本的`Seq`由`consumer`机制切换为了`predicate`机制，每次触发回调函数的同时会判定当前流是否终止，类似于`Golang 1.23`里的`range` from `func`，只不过返回的`boolean`代表终止而非`Golang`里的继续。
+基于这样的根本性改造，`Seq2`，`Seq3`等多参数流也被移除，在`Java 17`的`record`关键字加持下，新建元组的开销很低，多参数流不再有必要维护。
+
+除此以外，本次更新还完全重构和优化了`Reducer`的机制，去掉了多余的`Transducer`的概念，达到了一种大和谐的境界，不过用起来和之前倒是没啥区别。
+
+在字节写了大半年的`Go`，这个语言的语法虽然很恶心，不得不说还是有一些优秀的亮点特性，令人思路打开，可以说启发我解决了之前长久困扰的许多设计困难。
 
 #### 1.0.2 (20231110)
 
