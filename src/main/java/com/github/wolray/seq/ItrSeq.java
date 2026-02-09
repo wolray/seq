@@ -87,7 +87,8 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
                         }
                         flag = false;
                     }
-                    return set(t);
+                    next = t;
+                    return true;
                 }
                 return false;
             }
@@ -101,7 +102,7 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
 
     @Override
     default ItrSeq<T> filterIndexed(IntObjPredicate<T> predicate) {
-        return predicate == null ? this : copyIf((p, t) -> predicate.test(p.index, t) && p.set(t));
+        return predicate == null ? this : copyIf((p, t) -> predicate.test(p.index, t) && p.setAndIncrease(t));
     }
 
     @Override
@@ -161,7 +162,7 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
 
     @Override
     default <E> ItrSeq<E> mapIndexed(IntObjFunction<T, E> function) {
-        return copyIf((p, t) -> p.set(function.apply(p.index, t)));
+        return copyIf((p, t) -> p.setAndIncrease(function.apply(p.index, t)));
     }
 
     @Override
@@ -190,14 +191,14 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
                     return false;
                 }
             };
-            res.set(init);
+            res.next = init;
             return res;
         };
     }
 
     @Override
     default ItrSeq<T> take(int n) {
-        return n <= 0 ? ItrSeq.empty() : copyWhile((p, t) -> p.index < n && p.set(t));
+        return n <= 0 ? ItrSeq.empty() : copyWhile((p, t) -> p.index < n && p.setAndIncrease(t));
     }
 
     @Override
@@ -207,7 +208,7 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
 
     @Override
     default ItrSeq<T> takeWhile(BiPredicate<T, T> testPrevCurr) {
-        return copyWhile((p, t) -> (p.index == 0 || testPrevCurr.test(p.next, t)) && p.set(t));
+        return copyWhile((p, t) -> (p.index == 0 || testPrevCurr.test(p.next, t)) && p.setAndIncrease(t));
     }
 
     default <E> ItrSeq<T> takeWhile(Function<T, E> function, BiPredicate<E, E> testPrevCurr) {

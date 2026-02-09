@@ -74,13 +74,17 @@ public abstract class Puller<T> implements Iterator<T> {
     public final boolean pop(Iterator<T> iterator) {
         if (iterator.hasNext()) {
             next = iterator.next();
-            index++;
             return true;
         }
         return false;
     }
 
     public final boolean set(T value) {
+        next = value;
+        return true;
+    }
+
+    public final boolean setAndIncrease(T value) {
         next = value;
         index++;
         return true;

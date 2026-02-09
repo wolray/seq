@@ -49,10 +49,12 @@ public class SeqTest {
 
     @Test
     public void testRunningFold() {
-        ItrSeq<Integer> seq1 = Seq.of(0, 2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
-        Seq<Integer> seq2 = Seq.direct(0, 2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
-        assertTo(seq1.runningFold(0, Integer::sum), "0,2,6,7,13,16,21,28,38,49,61");
-        assertTo(seq2.runningFold(0, Integer::sum), "0,2,6,7,13,16,21,28,38,49,61");
+        ItrSeq<Integer> seq1 = Seq.of(2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
+        Seq<Integer> seq2 = Seq.direct(2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
+        assertTo(seq1.runningFold(1, Integer::sum), "3,7,8,14,17,22,29,39,50,62");
+        assertTo(seq2.runningFold(1, Integer::sum), "3,7,8,14,17,22,29,39,50,62");
+        assertTo(seq1.runningFold(1, Integer::sum).take(4), "3,7,8,14");
+        assertTo(seq2.runningFold(1, Integer::sum).take(4), "3,7,8,14");
     }
 
     @Test
@@ -211,6 +213,8 @@ public class SeqTest {
         Splitter splitter3 = Splitter.of(Pattern.compile("[abc]"));
         assertTo(splitter3.split("1a2b3c4"), "1,2,3,4");
         assertTo(splitter3.split("1a2b3c"), "1,2,3,");
+        assertTo(splitter3.split("1a2b3c").take(2), "1,2");
+        assertTo(splitter3.split("1a2b3c").drop(2), "3,");
     }
 
     @Test

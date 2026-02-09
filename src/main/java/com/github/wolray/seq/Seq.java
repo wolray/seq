@@ -85,7 +85,7 @@ public interface Seq<T> {
             @Override
             public boolean hasNext() {
                 if (index == 0) {
-                    return set(t);
+                    return setAndIncrease(t);
                 } else {
                     return set(t = operator.apply(t));
                 }
@@ -100,9 +100,9 @@ public interface Seq<T> {
             @Override
             public boolean hasNext() {
                 if (index == 0) {
-                    return set(t1);
+                    return setAndIncrease(t1);
                 } else if (index == 1) {
-                    return set(t2);
+                    return setAndIncrease(t2);
                 } else {
                     return set(t2 = operator.apply(t1, t1 = t2));
                 }
@@ -192,7 +192,7 @@ public interface Seq<T> {
         return () -> new Puller<Integer>() {
             @Override
             public boolean hasNext() {
-                return index < n && set(index);
+                return index < n && setAndIncrease(index);
             }
         };
     }
@@ -201,7 +201,7 @@ public interface Seq<T> {
         return () -> new Puller<T>() {
             @Override
             public boolean hasNext() {
-                return index < n && set(t);
+                return index < n && setAndIncrease(t);
             }
         };
     }

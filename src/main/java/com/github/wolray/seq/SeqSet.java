@@ -16,4 +16,9 @@ public class SeqSet<T> extends LinkedHashSet<T> implements ItrSeq<T> {
     public SeqSet(Collection<? extends T> c) {
         super(c);
     }
+
+    @Override
+    public int sizeOrDefault() {
+        return size();
+    }
 }
