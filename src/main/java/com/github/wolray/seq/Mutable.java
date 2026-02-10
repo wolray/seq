@@ -7,8 +7,8 @@ import java.util.concurrent.ForkJoinPool;
  * @author wolray
  */
 public class Mutable<T> implements Lazy<T> {
-    protected boolean isSet = false;
     protected T it;
+    protected boolean isSet = false;
 
     public Mutable(T it) {
         this.it = it;

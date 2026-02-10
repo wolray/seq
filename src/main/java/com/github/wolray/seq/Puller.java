@@ -8,8 +8,8 @@ import java.util.function.Function;
  * @author wolray
  */
 public abstract class Puller<T> implements Iterator<T> {
-    protected int index = 0;
     protected T next;
+    protected int index = 0;
 
     @Override
     public final T next() {
