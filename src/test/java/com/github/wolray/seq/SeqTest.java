@@ -129,15 +129,17 @@ public class SeqTest {
     @Test
     public void testWhileEquals() {
         Seq<Integer> seq1 = Seq.direct(1, 1, 1, 2, 3, 4, 6);
-        Seq<Integer> seq2 = Seq.of(Arrays.asList(1, 1, 1, 2, 3, 4, 6));
+        ItrSeq<Integer> seq2 = Seq.of(1, 1, 1, 2, 3, 4, 6);
         assertTo(seq1.takeWhileEquals(), "1,1,1");
         assertTo(seq2.takeWhileEquals(), "1,1,1");
     }
 
     @Test
     public void testToArray() {
-        Seq<Integer> seq = Seq.of(1, 1, 2, 3, 4, 6);
-        assertTo(Seq.of(seq.toObjArray(Integer[]::new)), "1,1,2,3,4,6");
+        Seq<Integer> seq1 = Seq.direct(1, 1, 2, 3, 4, 6);
+        ItrSeq<Integer> seq2 = Seq.of(1, 1, 2, 3, 4, 6);
+        assertTo(Seq.of(seq1.toObjArray(Integer[]::new)), "1,1,2,3,4,6");
+        assertTo(Seq.of(seq2.toObjArray(Integer[]::new)), "1,1,2,3,4,6");
     }
 
     @Test

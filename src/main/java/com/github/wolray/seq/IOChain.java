@@ -16,15 +16,15 @@ public interface IOChain<T> {
         }
     }
 
+    static <T> IOChain<T> of(IOChain<T> supplier) {
+        return supplier;
+    }
+
     static IOChain<Void> of(Runnable runnable) {
         return () -> {
             runnable.run();
             return null;
         };
-    }
-
-    static <T> IOChain<T> of(IOChain<T> supplier) {
-        return supplier;
     }
 
     static <T> IOChain<T> of(T t) {
@@ -45,13 +45,9 @@ public interface IOChain<T> {
         };
     }
 
-    default Lazy<T> asLazy() {
-        return Lazy.of(this::get);
-    }
-
-    default T get() {
+    default void use(Consumer<T> consumer) {
         try {
-            return call();
+            consumer.accept(call());
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -73,6 +69,10 @@ public interface IOChain<T> {
         };
     }
 
+    default Lazy<T> asLazy() {
+        return Lazy.of(this::get);
+    }
+
     default <E> Seq<E> toSeq(Function<T, E> provider) {
         return p -> {
             use(t -> {
@@ -87,9 +87,9 @@ public interface IOChain<T> {
         };
     }
 
-    default void use(Consumer<T> consumer) {
+    default T get() {
         try {
-            consumer.accept(call());
+            return call();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

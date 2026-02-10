@@ -4,8 +4,8 @@ package com.github.wolray.seq;
  * @author wolray
  */
 public class LongPair<T> {
-    public long longVal;
     public T it;
+    public long longVal;
 
     public LongPair(long longVal, T it) {
         this.longVal = longVal;

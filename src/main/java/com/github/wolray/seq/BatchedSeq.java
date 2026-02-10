@@ -9,10 +9,21 @@ import java.util.function.Predicate;
  * @author wolray
  */
 public class BatchedSeq<T> implements SizedSeq<T> {
-    private transient int batchSize = 10;
     private transient final LinkedList<ArrayList<T>> list = new LinkedList<>();
-    private transient int size;
+
     private transient ArrayList<T> cur;
+    private transient int batchSize = 10;
+    private transient int size;
+
+    @Override
+    public Iterator<T> iterator() {
+        return ItrSeq.flatIterable(list);
+    }
+
+    @Override
+    public String toString() {
+        return toList().toString();
+    }
 
     @Override
     public boolean until(Predicate<T> stop) {
@@ -27,17 +38,8 @@ public class BatchedSeq<T> implements SizedSeq<T> {
     }
 
     @Override
-    public Iterator<T> iterator() {
-        return ItrSeq.flatIterable(list);
-    }
-
-    @Override
     public int size() {
         return size;
-    }
-
-    public boolean isEmpty() {
-        return size == 0;
     }
 
     public void add(T t) {
@@ -53,8 +55,7 @@ public class BatchedSeq<T> implements SizedSeq<T> {
         }
     }
 
-    @Override
-    public String toString() {
-        return toList().toString();
+    public boolean isEmpty() {
+        return size == 0;
     }
 }

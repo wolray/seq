@@ -14,10 +14,14 @@ public class Mutable<T> implements Lazy<T> {
         this.it = it;
     }
 
-    protected void eval() {}
-
-    protected void eval(ForkJoinPool pool) {
-        eval();
+    @Override
+    public synchronized final T forkJoin(ForkJoinPool pool) {
+        if (isSet) {
+            return it;
+        }
+        eval(pool);
+        isSet = true;
+        return it;
     }
 
     @Override
@@ -26,16 +30,6 @@ public class Mutable<T> implements Lazy<T> {
             return it;
         }
         eval();
-        isSet = true;
-        return it;
-    }
-
-    @Override
-    public synchronized final T forkJoin(ForkJoinPool pool) {
-        if (isSet) {
-            return it;
-        }
-        eval(pool);
         isSet = true;
         return it;
     }
@@ -53,5 +47,11 @@ public class Mutable<T> implements Lazy<T> {
 
     public Optional<T> toOptional() {
         return isSet ? Optional.ofNullable(it) : Optional.empty();
+    }
+
+    protected void eval() {}
+
+    protected void eval(ForkJoinPool pool) {
+        eval();
     }
 }

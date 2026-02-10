@@ -9,74 +9,16 @@ import java.util.function.*;
  * @author wolray
  */
 public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
-    static <T, E> ItrSeq<E> copyIf(Iterable<T> iterable, BiPredicate<Puller<E>, T> predicate) {
-        return () -> copyIf(iterable.iterator(), predicate);
-    }
-
-    static <T, E> Puller<E> copyIf(Iterator<T> iterator, BiPredicate<Puller<E>, T> predicate) {
-        return new Puller<E>() {
-            @Override
-            public boolean hasNext() {
-                while (iterator.hasNext()) {
-                    T t = iterator.next();
-                    if (predicate.test(this, t)) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-        };
-    }
-
-    static <T, E> ItrSeq<E> copyWhile(Iterable<T> iterable, BiPredicate<Puller<E>, T> predicate) {
-        return () -> copyWhile(iterable.iterator(), predicate);
-    }
-
-    static <T, E> Puller<E> copyWhile(Iterator<T> iterator, BiPredicate<Puller<E>, T> predicate) {
-        return new Puller<E>() {
-            @Override
-            public boolean hasNext() {
-                if (iterator.hasNext()) {
-                    return predicate.test(this, iterator.next());
-                }
-                return false;
-            }
-        };
-    }
-
-    static <T> ItrSeq<T> empty() {
-        return Collections::emptyIterator;
-    }
-
-    static <T> Puller<T> flatIterable(Iterable<? extends Iterable<T>> iterable) {
-        return new Puller<T>() {
-            final Iterator<? extends Iterable<T>> iterator = iterable.iterator();
-            Iterator<T> cur = Collections.emptyIterator();
-
-            @Override
-            public boolean hasNext() {
-                while (!cur.hasNext()) {
-                    if (iterator.hasNext()) {
-                        cur = iterator.next().iterator();
-                    } else {
-                        return false;
-                    }
-                }
-                return pop(cur);
-            }
-        };
-    }
-
-    @Override
-    default ItrSeq<T> asIterable() {
-        return this;
-    }
-
     @Override
     default void consume(Consumer<T> consumer) {
         for (T t : this) {
             consumer.accept(t);
         }
+    }
+
+    @Override
+    default ItrSeq<T> asIterable() {
+        return this;
     }
 
     @Override
@@ -120,35 +62,17 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
 
     @Override
     default ItrSeq<T> filter(Predicate<T> predicate) {
-        return predicate == null ? this : copyIf(this, (p, t) -> predicate.test(t) && p.set(t));
+        return copyIf(this, (p, t) -> predicate.test(t) && p.set(t));
     }
 
     @Override
     default ItrSeq<T> filterIndexed(IntObjPredicate<T> predicate) {
-        return predicate == null ? this : copyIf(this, (p, t) -> predicate.test(p.index, t) && p.setAndIncrease(t));
+        return copyIf(this, (p, t) -> predicate.test(p.index, t) && p.setAndIncrease(t));
     }
 
     @Override
     default <E extends T> ItrSeq<E> filterInstance(Class<E> cls) {
         return copyIf(this, (p, t) -> cls.isInstance(t) && p.set(cls.cast(t)));
-    }
-
-    @Override
-    default Optional<T> find(Predicate<T> predicate) {
-        for (T t : this) {
-            if (predicate.test(t)) {
-                return Optional.of(t);
-            }
-        }
-        return Optional.empty();
-    }
-
-    @Override
-    default T first() {
-        for (T t : this) {
-            return t;
-        }
-        return null;
     }
 
     @Override
@@ -159,23 +83,6 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
     @Override
     default <E> ItrSeq<E> flatOptional(Function<T, Optional<E>> function) {
         return Seq.flatOptional(map(function));
-    }
-
-    default <E> E fold(E init, BiFunction<E, T, E> function) {
-        E acc = init;
-        for (T t : this) {
-            acc = function.apply(acc, t);
-        }
-        return acc;
-    }
-
-    @Override
-    default T last() {
-        T res = null;
-        for (T t : this) {
-            res = t;
-        }
-        return res;
     }
 
     @Override
@@ -225,17 +132,40 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
     }
 
     @Override
+    default ItrSeq<T> takeWhile(BiPredicate<T, T> testPrevCurr) {
+        return copyWhile(this, (p, t) -> (p.index == 0 || testPrevCurr.test(p.next, t)) && p.setAndIncrease(t));
+    }
+
+    @Override
     default ItrSeq<T> takeWhile(Predicate<T> predicate) {
         return copyWhile(this, (p, t) -> predicate.test(t) && p.set(t));
     }
 
     @Override
-    default ItrSeq<T> takeWhile(BiPredicate<T, T> testPrevCurr) {
-        return copyWhile(this, (p, t) -> (p.index == 0 || testPrevCurr.test(p.next, t)) && p.setAndIncrease(t));
+    default Optional<T> find(Predicate<T> predicate) {
+        for (T t : this) {
+            if (predicate.test(t)) {
+                return Optional.of(t);
+            }
+        }
+        return Optional.empty();
     }
 
-    default <E> ItrSeq<T> takeWhile(Function<T, E> function, BiPredicate<E, E> testPrevCurr) {
-        return zipBy(map(function).takeWhile(testPrevCurr), (a, b) -> a);
+    @Override
+    default T first() {
+        for (T t : this) {
+            return t;
+        }
+        return null;
+    }
+
+    @Override
+    default T last() {
+        T res = null;
+        for (T t : this) {
+            res = t;
+        }
+        return res;
     }
 
     @Override
@@ -248,8 +178,62 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
         return false;
     }
 
-    default ItrSeq<T> zip(T t) {
-        return () -> Puller.zip(iterator(), t);
+    static <T, E> ItrSeq<E> copyIf(Iterable<T> iterable, BiPredicate<Puller<E>, T> predicate) {
+        return () -> copyIf(iterable.iterator(), predicate);
+    }
+
+    static <T, E> ItrSeq<E> copyWhile(Iterable<T> iterable, BiPredicate<Puller<E>, T> predicate) {
+        return () -> copyWhile(iterable.iterator(), predicate);
+    }
+
+    static <T> ItrSeq<T> empty() {
+        return Collections::emptyIterator;
+    }
+
+    static <T, E> Puller<E> copyIf(Iterator<T> iterator, BiPredicate<Puller<E>, T> predicate) {
+        return new Puller<E>() {
+            @Override
+            public boolean hasNext() {
+                while (iterator.hasNext()) {
+                    T t = iterator.next();
+                    if (predicate.test(this, t)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        };
+    }
+
+    static <T, E> Puller<E> copyWhile(Iterator<T> iterator, BiPredicate<Puller<E>, T> predicate) {
+        return new Puller<E>() {
+            @Override
+            public boolean hasNext() {
+                if (iterator.hasNext()) {
+                    return predicate.test(this, iterator.next());
+                }
+                return false;
+            }
+        };
+    }
+
+    static <T> Puller<T> flatIterable(Iterable<? extends Iterable<T>> iterable) {
+        return new Puller<T>() {
+            final Iterator<? extends Iterable<T>> iterator = iterable.iterator();
+            Iterator<T> cur = Collections.emptyIterator();
+
+            @Override
+            public boolean hasNext() {
+                while (!cur.hasNext()) {
+                    if (iterator.hasNext()) {
+                        cur = iterator.next().iterator();
+                    } else {
+                        return false;
+                    }
+                }
+                return pop(cur);
+            }
+        };
     }
 
     default <E> void zip(Iterable<E> iterable, BiConsumer<T, E> consumer) {
@@ -258,6 +242,22 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
         while (ai.hasNext() && bi.hasNext()) {
             consumer.accept(ai.next(), bi.next());
         }
+    }
+
+    default <E> E fold(E init, BiFunction<E, T, E> function) {
+        E acc = init;
+        for (T t : this) {
+            acc = function.apply(acc, t);
+        }
+        return acc;
+    }
+
+    default <E> ItrSeq<T> takeWhile(Function<T, E> function, BiPredicate<E, E> testPrevCurr) {
+        return zipBy(map(function).takeWhile(testPrevCurr), (a, b) -> a);
+    }
+
+    default ItrSeq<T> zip(T t) {
+        return () -> Puller.zip(iterator(), t);
     }
 
     default <E, R> ItrSeq<R> zipBy(Iterable<E> iterable, BiFunction<T, E, R> function) {

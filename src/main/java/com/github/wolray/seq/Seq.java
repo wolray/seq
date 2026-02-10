@@ -11,36 +11,8 @@ import java.util.regex.Pattern;
 public interface Seq<T> {
     boolean until(Predicate<T> stop);
 
-    @SafeVarargs
-    static <T> Seq<T> direct(T... ts) {
-        return p -> {
-            for (T t : ts) {
-                if (p.test(t)) {
-                    return true;
-                }
-            }
-            return false;
-        };
-    }
-
     static <T> ItrSeq<T> empty() {
         return Collections::emptyIterator;
-    }
-
-    static <T> Seq<T> flat(Seq<Optional<T>> seq) {
-        return p -> seq.until(o -> o.filter(p).isPresent());
-    }
-
-    @SafeVarargs
-    static <T> Seq<T> flat(Seq<T>... seq) {
-        return p -> {
-            for (Seq<T> s : seq) {
-                if (s.until(p)) {
-                    return true;
-                }
-            }
-            return false;
-        };
     }
 
     @SafeVarargs
@@ -93,18 +65,6 @@ public interface Seq<T> {
         };
     }
 
-    static Seq<Matcher> match(String s, Pattern pattern) {
-        return p -> {
-            Matcher matcher = pattern.matcher(s);
-            while (matcher.find()) {
-                if (p.test(matcher)) {
-                    return true;
-                }
-            }
-            return false;
-        };
-    }
-
     static <T> ItrSeq<T> of(Iterable<T> iterable) {
         if (iterable instanceof ItrSeq) {
             return (ItrSeq<T>)iterable;
@@ -126,13 +86,81 @@ public interface Seq<T> {
         return iterable::iterator;
     }
 
-    static <T> Seq<T> of(Optional<T> optional) {
-        return p -> optional.filter(p).isPresent();
-    }
-
     @SafeVarargs
     static <T> ItrSeq<T> of(T... ts) {
         return of(Arrays.asList(ts));
+    }
+
+    static ItrSeq<Integer> range(int n) {
+        return () -> new Puller<Integer>() {
+            @Override
+            public boolean hasNext() {
+                return index < n && setAndIncrease(index);
+            }
+        };
+    }
+
+    static <T> ItrSeq<T> repeat(int n, T t) {
+        return () -> new Puller<T>() {
+            @Override
+            public boolean hasNext() {
+                return index < n && setAndIncrease(t);
+            }
+        };
+    }
+
+    static <T> ItrSeq<T> untilNull(Supplier<T> supplier) {
+        return () -> new Puller<T>() {
+            @Override
+            public boolean hasNext() {
+                T t = supplier.get();
+                return t != null && set(t);
+            }
+        };
+    }
+
+    @SafeVarargs
+    static <T> Seq<T> direct(T... ts) {
+        return p -> {
+            for (T t : ts) {
+                if (p.test(t)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+    }
+
+    static <T> Seq<T> flat(Seq<Optional<T>> seq) {
+        return p -> seq.until(o -> o.filter(p).isPresent());
+    }
+
+    @SafeVarargs
+    static <T> Seq<T> flat(Seq<T>... seq) {
+        return p -> {
+            for (Seq<T> s : seq) {
+                if (s.until(p)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+    }
+
+    static Seq<Matcher> match(String s, Pattern pattern) {
+        return p -> {
+            Matcher matcher = pattern.matcher(s);
+            while (matcher.find()) {
+                if (p.test(matcher)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+    }
+
+    static <T> Seq<T> of(Optional<T> optional) {
+        return p -> optional.filter(p).isPresent();
     }
 
     static Seq<Object> ofJson(Object node) {
@@ -162,36 +190,120 @@ public interface Seq<T> {
         return SeqExpand.of(sub).toSeq(node, maxDepth);
     }
 
-    static ItrSeq<Integer> range(int n) {
-        return () -> new Puller<Integer>() {
-            @Override
-            public boolean hasNext() {
-                return index < n && setAndIncrease(index);
-            }
-        };
-    }
-
-    static <T> ItrSeq<T> repeat(int n, T t) {
-        return () -> new Puller<T>() {
-            @Override
-            public boolean hasNext() {
-                return index < n && setAndIncrease(t);
-            }
-        };
-    }
-
     static <T> Seq<T> unit(T t) {
         return p -> p.test(t);
     }
 
-    static <T> ItrSeq<T> untilNull(Supplier<T> supplier) {
-        return () -> new Puller<T>() {
-            @Override
-            public boolean hasNext() {
-                T t = supplier.get();
-                return t != null && set(t);
+    default void consume(Consumer<T> consumer) {
+        until(t -> {
+            consumer.accept(t);
+            return false;
+        });
+    }
+
+    default void printAll(String sep) {
+        if ("\n".equals(sep)) {
+            println();
+        } else {
+            System.out.println(join(sep, Objects::toString));
+        }
+    }
+
+    default void println() {
+        consume(System.out::println);
+    }
+
+    default <E> void zip(Iterable<E> iterable, BiConsumer<T, E> consumer) {
+        Iterator<E> iterator = iterable.iterator();
+        until(t -> {
+            if (iterator.hasNext()) {
+                consumer.accept(t, iterator.next());
+                return false;
             }
-        };
+            return true;
+        });
+    }
+
+    default BatchedSeq<T> cache() {
+        return toBatched();
+    }
+
+    default BatchedSeq<T> toBatched() {
+        return reduce(new BatchedSeq<>(), BatchedSeq::add);
+    }
+
+    default <C extends Collection<T>> C collectBy(IntFunction<C> constructor) {
+        return reduce(constructor.apply(sizeOrDefault()), Collection::add);
+    }
+
+    default ConcurrentSeq<T> toConcurrent() {
+        return reduce(new ConcurrentSeq<>(), ConcurrentSeq::add);
+    }
+
+    default <E> E reduce(Reducer<T, E> reducer) {
+        Reducer.Worker<T, E> worker = reducer.get();
+        consume(worker::accept);
+        return worker.result();
+    }
+
+    default <E> E reduce(E des, BiConsumer<E, T> accumulator) {
+        consume(t -> accumulator.accept(des, t));
+        return des;
+    }
+
+    default <E, V> E reduce(Reducer<T, V> reducer, Function<V, E> function) {
+        return function.apply(reduce(reducer));
+    }
+
+    default ItrSeq<T> asIterable() {
+        return toBatched();
+    }
+
+    default <E> Lazy<E> toLazy(Reducer<T, E> reducer) {
+        return Lazy.of(() -> reduce(reducer));
+    }
+
+    default LinkedSeq<T> toLinked() {
+        return reduce(new LinkedSeq<>(), LinkedSeq::add);
+    }
+
+    default Optional<T> find(Predicate<T> predicate) {
+        return reduce(Reducer.find(predicate));
+    }
+
+    default Optional<T> findDuplicate() {
+        Set<T> set = new HashSet<>(sizeOrDefault());
+        return find(t -> !set.add(t));
+    }
+
+    default Optional<T> findFirst() {
+        return find(t -> true);
+    }
+
+    default Optional<T> findNot(Predicate<T> predicate) {
+        return find(predicate.negate());
+    }
+
+    default Optional<T> last(Predicate<T> predicate) {
+        return filter(predicate).lastMaybe();
+    }
+
+    default Optional<T> lastMaybe() {
+        Mutable<T> m = new Mutable<>(null);
+        consume(m::set);
+        return m.toOptional();
+    }
+
+    default Optional<T> lastNot(Predicate<T> predicate) {
+        return last(predicate.negate());
+    }
+
+    default <V extends Comparable<V>> Pair<T, V> maxBy(Function<T, V> function) {
+        return reduce(Reducer.maxBy(function));
+    }
+
+    default <V extends Comparable<V>> Pair<T, V> minBy(Function<T, V> function) {
+        return reduce(Reducer.minBy(function));
     }
 
     default Seq<T> append(T t) {
@@ -232,22 +344,6 @@ public interface Seq<T> {
 
     default Seq<T> appendWith(Seq<T> seq) {
         return p -> until(p) || seq.until(p);
-    }
-
-    default ItrSeq<T> asIterable() {
-        return toBatched();
-    }
-
-    default double average(ToDoubleFunction<T> function) {
-        return average(function, null);
-    }
-
-    default double average(ToDoubleFunction<T> function, ToDoubleFunction<T> weightFunction) {
-        return reduce(Reducer.average(function, weightFunction));
-    }
-
-    default BatchedSeq<T> cache() {
-        return toBatched();
     }
 
     default Seq<SeqList<T>> chunked(int size) {
@@ -297,40 +393,6 @@ public interface Seq<T> {
                 }
             }
         };
-    }
-
-    default <C extends Collection<T>> C collectBy(IntFunction<C> constructor) {
-        return reduce(constructor.apply(sizeOrDefault()), Collection::add);
-    }
-
-    default void consume(Consumer<T> consumer) {
-        until(t -> {
-            consumer.accept(t);
-            return false;
-        });
-    }
-
-    default boolean consumeIndexed(IntObjPredicate<T> predicate) {
-        return until(new Predicate<T>() {
-            int index = 0;
-
-            @Override
-            public boolean test(T t) {
-                return predicate.test(index++, t);
-            }
-        });
-    }
-
-    default int count() {
-        return reduce(Reducer.count());
-    }
-
-    default int count(Predicate<T> predicate) {
-        return reduce(Reducer.count(predicate));
-    }
-
-    default int countNot(Predicate<T> predicate) {
-        return reduce(Reducer.countNot(predicate));
     }
 
     default Seq<T> distinct() {
@@ -406,19 +468,19 @@ public interface Seq<T> {
     }
 
     default Seq<T> filter(Predicate<T> predicate) {
-        return predicate == null ? this : p -> until(t -> predicate.test(t) && p.test(t));
+        return p -> until(t -> predicate.test(t) && p.test(t));
     }
 
     default Seq<T> filterIn(Collection<T> collection) {
-        return collection == null ? this : filter(collection::contains);
+        return filter(collection::contains);
     }
 
     default Seq<T> filterIn(Map<T, ?> map) {
-        return map == null ? this : filter(map::containsKey);
+        return filter(map::containsKey);
     }
 
     default Seq<T> filterIndexed(IntObjPredicate<T> predicate) {
-        return predicate == null ? this : p -> consumeIndexed((i, t) -> predicate.test(i, t) && p.test(t));
+        return p -> consumeIndexed((i, t) -> predicate.test(i, t) && p.test(t));
     }
 
     default <E extends T> Seq<E> filterInstance(Class<E> cls) {
@@ -426,45 +488,19 @@ public interface Seq<T> {
     }
 
     default Seq<T> filterNot(Predicate<T> predicate) {
-        return predicate == null ? this : filter(predicate.negate());
+        return filter(predicate.negate());
     }
 
     default Seq<T> filterNotIn(Collection<T> collection) {
-        return collection == null ? this : filterNot(collection::contains);
+        return filterNot(collection::contains);
     }
 
     default Seq<T> filterNotIn(Map<T, ?> map) {
-        return map == null ? this : filterNot(map::containsKey);
+        return filterNot(map::containsKey);
     }
 
     default Seq<T> filterNotNull() {
         return filter(Objects::nonNull);
-    }
-
-    default Optional<T> find(Predicate<T> predicate) {
-        return reduce(Reducer.find(predicate));
-    }
-
-    default Optional<T> findDuplicate() {
-        Set<T> set = new HashSet<>(sizeOrDefault());
-        return find(t -> !set.add(t));
-    }
-
-    default Optional<T> findFirst() {
-        return find(t -> true);
-    }
-
-    default Optional<T> findNot(Predicate<T> predicate) {
-        return find(predicate.negate());
-    }
-
-    default T first() {
-        Mutable<T> m = new Mutable<>(null);
-        until(t -> {
-            m.it = t;
-            return true;
-        });
-        return m.it;
     }
 
     default <E> Seq<E> flatIterable(Function<T, Iterable<E>> function) {
@@ -486,48 +522,6 @@ public interface Seq<T> {
         return p -> until(t -> function.apply(t).filter(p).isPresent());
     }
 
-    default <K> SeqMap<K, SeqList<T>> groupBy(Function<T, K> toKey) {
-        return reduce(Reducer.groupBy(toKey, Reducer.toList()));
-    }
-
-    default <K> SeqMap<K, T> groupBy(Function<T, K> toKey, BinaryOperator<T> operator) {
-        return reduce(Reducer.groupBy(toKey, Reducer.fold(operator)));
-    }
-
-    default <K, V> SeqMap<K, V> groupBy(Function<T, K> toKey, Reducer<T, V> reducer) {
-        return reduce(Reducer.groupBy(toKey, reducer));
-    }
-
-    default <K, E> SeqMap<K, SeqList<E>> groupBy(Function<T, K> toKey, Function<T, E> toValue) {
-        return groupBy(toKey, Reducer.mapping(toValue));
-    }
-
-    default String join(String sep) {
-        return join(sep, Object::toString);
-    }
-
-    default String join(String sep, Function<T, String> function) {
-        return reduce(new StringJoiner(sep), (j, t) -> j.add(function.apply(t))).toString();
-    }
-
-    default T last() {
-        return reduce(Reducer.last());
-    }
-
-    default Optional<T> last(Predicate<T> predicate) {
-        return filter(predicate).lastMaybe();
-    }
-
-    default Optional<T> lastMaybe() {
-        Mutable<T> m = new Mutable<>(null);
-        consume(m::set);
-        return m.toOptional();
-    }
-
-    default Optional<T> lastNot(Predicate<T> predicate) {
-        return last(predicate.negate());
-    }
-
     default <E> Seq<E> map(Function<T, E> function) {
         return p -> until(t -> p.test(function.apply(t)));
     }
@@ -547,38 +541,6 @@ public interface Seq<T> {
         });
     }
 
-    default boolean matchAll(Predicate<T> predicate) {
-        return !matchAny(predicate.negate());
-    }
-
-    default boolean matchAny(Predicate<T> predicate) {
-        return find(predicate).isPresent();
-    }
-
-    default boolean matchAnyNot(Predicate<T> predicate) {
-        return matchAny(predicate.negate());
-    }
-
-    default boolean matchNone(Predicate<T> predicate) {
-        return !find(predicate).isPresent();
-    }
-
-    default T max(Comparator<T> comparator) {
-        return reduce(Reducer.max(comparator));
-    }
-
-    default <V extends Comparable<V>> Pair<T, V> maxBy(Function<T, V> function) {
-        return reduce(Reducer.maxBy(function));
-    }
-
-    default T min(Comparator<T> comparator) {
-        return reduce(Reducer.min(comparator));
-    }
-
-    default <V extends Comparable<V>> Pair<T, V> minBy(Function<T, V> function) {
-        return reduce(Reducer.minBy(function));
-    }
-
     default Seq<T> onEach(Consumer<T> consumer) {
         return map(t -> {
             consumer.accept(t);
@@ -593,43 +555,8 @@ public interface Seq<T> {
         });
     }
 
-    default void printAll(String sep) {
-        if ("\n".equals(sep)) {
-            println();
-        } else {
-            System.out.println(join(sep, Objects::toString));
-        }
-    }
-
-    default void println() {
-        consume(System.out::println);
-    }
-
-    default T reduce(BinaryOperator<T> binaryOperator) {
-        return reduce(Reducer.fold(binaryOperator));
-    }
-
-    default <E> E reduce(Reducer<T, E> reducer) {
-        Reducer.Worker<T, E> worker = reducer.get();
-        consume(worker::accept);
-        return worker.result();
-    }
-
-    default <E> E reduce(E des, BiConsumer<E, T> accumulator) {
-        consume(t -> accumulator.accept(des, t));
-        return des;
-    }
-
-    default <E, V> E reduce(Reducer<T, V> reducer, Function<V, E> function) {
-        return function.apply(reduce(reducer));
-    }
-
     default Seq<T> replace(int n, UnaryOperator<T> operator) {
         return mapIndexed((i, t) -> i < n ? operator.apply(t) : t);
-    }
-
-    default SeqList<T> reverse() {
-        return reduce(Reducer.reverse());
     }
 
     default <E> Seq<E> runningFold(E init, BiFunction<E, T, E> function) {
@@ -641,18 +568,6 @@ public interface Seq<T> {
                 return p.test(cur = function.apply(cur, t));
             }
         });
-    }
-
-    default int sizeOrDefault() {
-        return 10;
-    }
-
-    default <E extends Comparable<E>> SeqList<T> sortBy(Function<T, E> function) {
-        return sortWith(Comparator.comparing(function));
-    }
-
-    default <E extends Comparable<E>> SeqList<T> sortByDesc(Function<T, E> function) {
-        return sortWith(Comparator.comparing(function).reversed());
     }
 
     default <E extends Comparable<E>> Seq<T> sortCached(Function<T, E> function) {
@@ -667,36 +582,6 @@ public interface Seq<T> {
             .map(p -> p.first);
     }
 
-    default SeqList<T> sortWith(Comparator<T> comparator) {
-        SeqList<T> list = toList();
-        list.sort(comparator);
-        return list;
-    }
-
-    default SeqList<T> sortWithDesc(Comparator<T> comparator) {
-        return sortWith(comparator.reversed());
-    }
-
-    default SeqList<T> sorted() {
-        return sortWith(null);
-    }
-
-    default SeqList<T> sortedDesc() {
-        return sortWith(Collections.reverseOrder());
-    }
-
-    default double sum(ToDoubleFunction<T> function) {
-        return reduce(Reducer.sum(function));
-    }
-
-    default int sumInt(ToIntFunction<T> function) {
-        return reduce(Reducer.sumInt(function));
-    }
-
-    default long sumLong(ToLongFunction<T> function) {
-        return reduce(Reducer.sumLong(function));
-    }
-
     default Seq<T> take(int n) {
         return p -> until(new Predicate<T>() {
             int i = 1;
@@ -706,10 +591,6 @@ public interface Seq<T> {
                 return i++ > n || p.test(t);
             }
         });
-    }
-
-    default Seq<T> takeWhile(Predicate<T> predicate) {
-        return p -> until(t -> !predicate.test(t) || p.test(t));
     }
 
     default Seq<T> takeWhile(BiPredicate<T, T> testPrevCurr) {
@@ -734,6 +615,10 @@ public interface Seq<T> {
         });
     }
 
+    default Seq<T> takeWhile(Predicate<T> predicate) {
+        return p -> until(t -> !predicate.test(t) || p.test(t));
+    }
+
     default Seq<T> takeWhileEquals() {
         return takeWhile(Objects::equals);
     }
@@ -743,89 +628,6 @@ public interface Seq<T> {
             long end = System.currentTimeMillis() + millis;
             return until(t -> System.currentTimeMillis() > end || p.test(t));
         };
-    }
-
-    default T[] toObjArray(IntFunction<T[]> initializer) {
-        BatchedSeq<T> ts = cache();
-        T[] a = initializer.apply(ts.size());
-        ts.consumeIndexed((i, t) -> {
-            a[i] = t;
-            return false;
-        });
-        return a;
-    }
-
-    default int[] toIntArray(ToIntFunction<T> function) {
-        BatchedSeq<T> ts = cache();
-        int[] a = new int[ts.size()];
-        ts.consumeIndexed((i, t) -> {
-            a[i] = function.applyAsInt(t);
-            return false;
-        });
-        return a;
-    }
-
-    default double[] toDoubleArray(ToDoubleFunction<T> function) {
-        BatchedSeq<T> ts = cache();
-        double[] a = new double[ts.size()];
-        ts.consumeIndexed((i, t) -> {
-            a[i] = function.applyAsDouble(t);
-            return false;
-        });
-        return a;
-    }
-
-    default long[] toLongArray(ToLongFunction<T> function) {
-        BatchedSeq<T> ts = cache();
-        long[] a = new long[ts.size()];
-        ts.consumeIndexed((i, t) -> {
-            a[i] = function.applyAsLong(t);
-            return false;
-        });
-        return a;
-    }
-
-    default boolean[] toBooleanArray(Predicate<T> function) {
-        BatchedSeq<T> ts = cache();
-        boolean[] a = new boolean[ts.size()];
-        ts.consumeIndexed((i, t) -> a[i] = function.test(t));
-        return a;
-    }
-
-    default BatchedSeq<T> toBatched() {
-        return reduce(new BatchedSeq<>(), BatchedSeq::add);
-    }
-
-    default ConcurrentSeq<T> toConcurrent() {
-        return reduce(new ConcurrentSeq<>(), ConcurrentSeq::add);
-    }
-
-    default <E> Lazy<E> toLazy(Reducer<T, E> reducer) {
-        return Lazy.of(() -> reduce(reducer));
-    }
-
-    default LinkedSeq<T> toLinked() {
-        return reduce(new LinkedSeq<>(), LinkedSeq::add);
-    }
-
-    default SeqList<T> toList() {
-        return reduce(new SeqList<>(sizeOrDefault()), SeqList::add);
-    }
-
-    default <K, V> SeqMap<K, V> toMap(Function<T, K> toKey, Function<T, V> toValue) {
-        return reduce(Reducer.toMap(() -> new SeqMap<>(sizeOrDefault()), toKey, toValue));
-    }
-
-    default <K> SeqMap<K, T> toMapBy(Function<T, K> toKey) {
-        return toMap(toKey, v -> v);
-    }
-
-    default <V> SeqMap<T, V> toMapWith(Function<T, V> toValue) {
-        return toMap(k -> k, toValue);
-    }
-
-    default SeqSet<T> toSet() {
-        return reduce(Reducer.toSet(sizeOrDefault()));
     }
 
     default Seq<SeqList<T>> windowed(int size, int step, boolean allowPartial) {
@@ -918,17 +720,6 @@ public interface Seq<T> {
         return p -> consumeIndexed((i, t) -> p.test(new IntPair<>(i, t)));
     }
 
-    default <E> void zip(Iterable<E> iterable, BiConsumer<T, E> consumer) {
-        Iterator<E> iterator = iterable.iterator();
-        until(t -> {
-            if (iterator.hasNext()) {
-                consumer.accept(t, iterator.next());
-                return false;
-            }
-            return true;
-        });
-    }
-
     default <E, R> Seq<R> zipBy(Iterable<E> iterable, BiFunction<T, E, R> function) {
         return p -> {
             Iterator<E> iterator = iterable.iterator();
@@ -940,6 +731,215 @@ public interface Seq<T> {
                 }
             });
         };
+    }
+
+    default SeqList<T> reverse() {
+        return reduce(Reducer.reverse());
+    }
+
+    default <E extends Comparable<E>> SeqList<T> sortBy(Function<T, E> function) {
+        return sortWith(Comparator.comparing(function));
+    }
+
+    default <E extends Comparable<E>> SeqList<T> sortByDesc(Function<T, E> function) {
+        return sortWith(Comparator.comparing(function).reversed());
+    }
+
+    default SeqList<T> sortWith(Comparator<T> comparator) {
+        SeqList<T> list = toList();
+        list.sort(comparator);
+        return list;
+    }
+
+    default SeqList<T> sortWithDesc(Comparator<T> comparator) {
+        return sortWith(comparator.reversed());
+    }
+
+    default SeqList<T> sorted() {
+        return sortWith(null);
+    }
+
+    default SeqList<T> sortedDesc() {
+        return sortWith(Collections.reverseOrder());
+    }
+
+    default SeqList<T> toList() {
+        return reduce(new SeqList<>(sizeOrDefault()), SeqList::add);
+    }
+
+    default <K> SeqMap<K, SeqList<T>> groupBy(Function<T, K> toKey) {
+        return reduce(Reducer.groupBy(toKey, Reducer.toList()));
+    }
+
+    default <K> SeqMap<K, T> groupBy(Function<T, K> toKey, BinaryOperator<T> operator) {
+        return reduce(Reducer.groupBy(toKey, Reducer.fold(operator)));
+    }
+
+    default <K, E> SeqMap<K, SeqList<E>> groupBy(Function<T, K> toKey, Function<T, E> toValue) {
+        return groupBy(toKey, Reducer.mapping(toValue));
+    }
+
+    default <K, V> SeqMap<K, V> groupBy(Function<T, K> toKey, Reducer<T, V> reducer) {
+        return reduce(Reducer.groupBy(toKey, reducer));
+    }
+
+    default <K, V> SeqMap<K, V> toMap(Function<T, K> toKey, Function<T, V> toValue) {
+        return reduce(Reducer.toMap(() -> new SeqMap<>(sizeOrDefault()), toKey, toValue));
+    }
+
+    default <K> SeqMap<K, T> toMapBy(Function<T, K> toKey) {
+        return toMap(toKey, v -> v);
+    }
+
+    default <V> SeqMap<T, V> toMapWith(Function<T, V> toValue) {
+        return toMap(k -> k, toValue);
+    }
+
+    default SeqSet<T> toSet() {
+        return reduce(Reducer.toSet(sizeOrDefault()));
+    }
+
+    default String join(String sep) {
+        return join(sep, Object::toString);
+    }
+
+    default String join(String sep, Function<T, String> function) {
+        return reduce(new StringJoiner(sep), (j, t) -> j.add(function.apply(t))).toString();
+    }
+
+    default T first() {
+        Mutable<T> m = new Mutable<>(null);
+        until(t -> {
+            m.it = t;
+            return true;
+        });
+        return m.it;
+    }
+
+    default T last() {
+        return reduce(Reducer.last());
+    }
+
+    default T max(Comparator<T> comparator) {
+        return reduce(Reducer.max(comparator));
+    }
+
+    default T min(Comparator<T> comparator) {
+        return reduce(Reducer.min(comparator));
+    }
+
+    default T reduce(BinaryOperator<T> binaryOperator) {
+        return reduce(Reducer.fold(binaryOperator));
+    }
+
+    default T[] toObjArray(IntFunction<T[]> initializer) {
+        BatchedSeq<T> ts = cache();
+        T[] a = initializer.apply(ts.size());
+        ts.consumeIndexed((i, t) -> {
+            a[i] = t;
+            return false;
+        });
+        return a;
+    }
+
+    default boolean consumeIndexed(IntObjPredicate<T> predicate) {
+        return until(new Predicate<T>() {
+            int index = 0;
+
+            @Override
+            public boolean test(T t) {
+                return predicate.test(index++, t);
+            }
+        });
+    }
+
+    default boolean matchAll(Predicate<T> predicate) {
+        return !matchAny(predicate.negate());
+    }
+
+    default boolean matchAny(Predicate<T> predicate) {
+        return find(predicate).isPresent();
+    }
+
+    default boolean matchAnyNot(Predicate<T> predicate) {
+        return matchAny(predicate.negate());
+    }
+
+    default boolean matchNone(Predicate<T> predicate) {
+        return !find(predicate).isPresent();
+    }
+
+    default boolean[] toBooleanArray(Predicate<T> function) {
+        BatchedSeq<T> ts = cache();
+        boolean[] a = new boolean[ts.size()];
+        ts.consumeIndexed((i, t) -> a[i] = function.test(t));
+        return a;
+    }
+
+    default double average(ToDoubleFunction<T> function) {
+        return average(function, null);
+    }
+
+    default double average(ToDoubleFunction<T> function, ToDoubleFunction<T> weightFunction) {
+        return reduce(Reducer.average(function, weightFunction));
+    }
+
+    default double sum(ToDoubleFunction<T> function) {
+        return reduce(Reducer.sum(function));
+    }
+
+    default double[] toDoubleArray(ToDoubleFunction<T> function) {
+        BatchedSeq<T> ts = cache();
+        double[] a = new double[ts.size()];
+        ts.consumeIndexed((i, t) -> {
+            a[i] = function.applyAsDouble(t);
+            return false;
+        });
+        return a;
+    }
+
+    default int count() {
+        return reduce(Reducer.count());
+    }
+
+    default int count(Predicate<T> predicate) {
+        return reduce(Reducer.count(predicate));
+    }
+
+    default int countNot(Predicate<T> predicate) {
+        return reduce(Reducer.countNot(predicate));
+    }
+
+    default int sizeOrDefault() {
+        return 10;
+    }
+
+    default int sumInt(ToIntFunction<T> function) {
+        return reduce(Reducer.sumInt(function));
+    }
+
+    default int[] toIntArray(ToIntFunction<T> function) {
+        BatchedSeq<T> ts = cache();
+        int[] a = new int[ts.size()];
+        ts.consumeIndexed((i, t) -> {
+            a[i] = function.applyAsInt(t);
+            return false;
+        });
+        return a;
+    }
+
+    default long sumLong(ToLongFunction<T> function) {
+        return reduce(Reducer.sumLong(function));
+    }
+
+    default long[] toLongArray(ToLongFunction<T> function) {
+        BatchedSeq<T> ts = cache();
+        long[] a = new long[ts.size()];
+        ts.consumeIndexed((i, t) -> {
+            a[i] = function.applyAsLong(t);
+            return false;
+        });
+        return a;
     }
 
     interface IntObjConsumer<T> {

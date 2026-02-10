@@ -9,6 +9,23 @@ import java.util.regex.Pattern;
 public interface Splitter {
     Seq<String> split(String s);
 
+    static Splitter of(Pattern sep) {
+        return s -> {
+            char[] chars = s.toCharArray();
+            return p -> {
+                Matcher matcher = sep.matcher(s);
+                int beg = 0;
+                while (matcher.find()) {
+                    if (p.test(substring(chars, beg, matcher.start()))) {
+                        return true;
+                    }
+                    beg = matcher.end();
+                }
+                return p.test(substring(chars, beg, chars.length));
+            };
+        };
+    }
+
     static Splitter of(String literal) {
         int len = literal.length();
         if (len == 0) {
@@ -47,23 +64,6 @@ public interface Splitter {
                     }
                 }
                 return p.test(substring(chars, last, len));
-            };
-        };
-    }
-
-    static Splitter of(Pattern sep) {
-        return s -> {
-            char[] chars = s.toCharArray();
-            return p -> {
-                Matcher matcher = sep.matcher(s);
-                int beg = 0;
-                while (matcher.find()) {
-                    if (p.test(substring(chars, beg, matcher.start()))) {
-                        return true;
-                    }
-                    beg = matcher.end();
-                }
-                return p.test(substring(chars, beg, chars.length));
             };
         };
     }

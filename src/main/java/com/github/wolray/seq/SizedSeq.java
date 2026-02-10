@@ -4,13 +4,8 @@ public interface SizedSeq<T> extends ItrSeq<T> {
     int size();
 
     @Override
-    default int sizeOrDefault() {
-        return size();
-    }
-
-    @Override
-    default int count() {
-        return size();
+    default ItrSeq<T> drop(int n) {
+        return n >= size() ? ItrSeq.empty() : ItrSeq.super.drop(n);
     }
 
     @Override
@@ -19,7 +14,12 @@ public interface SizedSeq<T> extends ItrSeq<T> {
     }
 
     @Override
-    default ItrSeq<T> drop(int n) {
-        return n >= size() ? ItrSeq.empty() : ItrSeq.super.drop(n);
+    default int count() {
+        return size();
+    }
+
+    @Override
+    default int sizeOrDefault() {
+        return size();
     }
 }

@@ -9,6 +9,7 @@ import java.util.function.Predicate;
  */
 public class TreeSeq<N> implements Seq<N> {
     public final N root;
+
     private final Function<N, Iterator<N>> toSub;
 
     public TreeSeq(N root, Function<N, Iterator<N>> toSub) {

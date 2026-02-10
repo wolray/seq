@@ -116,6 +116,12 @@ public interface Lazy<T> extends Supplier<T> {
         };
     }
 
+    static <T> Lazy<T> unset() {
+        return of(() -> {
+            throw new UnsetException();
+        });
+    }
+
     static <T> Supplier<T> submit(ForkJoinPool pool, Supplier<T> supplier) {
         RecursiveTask<T> task;
         if (supplier instanceof Lazy) {
@@ -142,10 +148,10 @@ public interface Lazy<T> extends Supplier<T> {
         return task::join;
     }
 
-    static <T> Lazy<T> unset() {
-        return of(() -> {
-            throw new UnsetException();
-        });
+    default void ifSet(Consumer<T> consumer) {
+        if (isSet()) {
+            consumer.accept(get());
+        }
     }
 
     default Lazy<T> andThen(Consumer<T> consumer) {
@@ -156,30 +162,24 @@ public interface Lazy<T> extends Supplier<T> {
         });
     }
 
-    default T forkJoin() {
-        return forkJoin(ForkJoinPool.commonPool());
-    }
-
-    default void ifSet(Consumer<T> consumer) {
-        if (isSet()) {
-            consumer.accept(get());
-        }
-    }
-
-    default boolean isSet() {
-        throw new UnsupportedOperationException();
-    }
-
     default <E> Lazy<E> map(Function<T, E> function) {
         return of(this, function);
+    }
+
+    default Lazy<T> wrap(UnaryOperator<Supplier<T>> operator) {
+        return of(operator.apply(this));
+    }
+
+    default T forkJoin() {
+        return forkJoin(ForkJoinPool.commonPool());
     }
 
     default T set(T value) {
         throw new UnsupportedOperationException();
     }
 
-    default Lazy<T> wrap(UnaryOperator<Supplier<T>> operator) {
-        return of(operator.apply(this));
+    default boolean isSet() {
+        throw new UnsupportedOperationException();
     }
 
     class UnsetException extends RuntimeException {}

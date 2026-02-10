@@ -4,8 +4,8 @@ package com.github.wolray.seq;
  * @author wolray
  */
 public class IntPair<T> {
-    public int intVal;
     public T it;
+    public int intVal;
 
     public IntPair(int intVal, T it) {
         this.intVal = intVal;

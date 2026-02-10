@@ -4,8 +4,8 @@ package com.github.wolray.seq;
  * @author wolray
  */
 public class DoublePair<T> {
-    public double doubleVal;
     public T it;
+    public double doubleVal;
 
     public DoublePair(double doubleVal, T it) {
         this.doubleVal = doubleVal;

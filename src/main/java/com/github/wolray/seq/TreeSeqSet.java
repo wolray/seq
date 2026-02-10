@@ -11,12 +11,12 @@ import java.util.TreeSet;
 public class TreeSeqSet<T> extends TreeSet<T> implements SizedSeq<T> {
     public TreeSeqSet() {}
 
-    public TreeSeqSet(Comparator<? super T> comparator) {
-        super(comparator);
-    }
-
     public TreeSeqSet(Collection<? extends T> c) {
         super(c);
+    }
+
+    public TreeSeqSet(Comparator<? super T> comparator) {
+        super(comparator);
     }
 
     public TreeSeqSet(SortedSet<T> s) {

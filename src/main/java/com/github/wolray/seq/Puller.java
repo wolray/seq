@@ -11,6 +11,18 @@ public abstract class Puller<T> implements Iterator<T> {
     protected int index = 0;
     protected T next;
 
+    @Override
+    public final T next() {
+        return next;
+    }
+
+    @Override
+    public void forEachRemaining(Consumer<? super T> action) {
+        while (hasNext()) {
+            action.accept(next);
+        }
+    }
+
     public static <T, E> Puller<E> map(Iterator<T> iterator, Function<T, E> function) {
         return new Puller<E>() {
             @Override
@@ -33,22 +45,6 @@ public abstract class Puller<T> implements Iterator<T> {
                 return flag ? pop(iterator) : set(t);
             }
         };
-    }
-
-    @Override
-    public void forEachRemaining(Consumer<? super T> action) {
-        while (hasNext()) {
-            action.accept(next);
-        }
-    }
-
-    public final int index() {
-        return index;
-    }
-
-    @Override
-    public final T next() {
-        return next;
     }
 
     public final boolean pop(Iterator<T> iterator) {

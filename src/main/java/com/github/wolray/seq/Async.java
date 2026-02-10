@@ -19,6 +19,14 @@ public interface Async {
         }
     }
 
+    static void sleep(long time) {
+        try {
+            Thread.sleep(time);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     static Async common() {
         return of(ForkJoinPool.commonPool());
     }
@@ -43,6 +51,10 @@ public interface Async {
                 CompletableFuture.allOf(futures).join();
             }
         };
+    }
+
+    static Async of(ForkJoinPool forkJoinPool) {
+        return new ForkJoin(forkJoinPool);
     }
 
     static Async of(ThreadFactory factory) {
@@ -70,18 +82,6 @@ public interface Async {
                 apply(latch::wait);
             }
         };
-    }
-
-    static Async of(ForkJoinPool forkJoinPool) {
-        return new ForkJoin(forkJoinPool);
-    }
-
-    static void sleep(long time) {
-        try {
-            Thread.sleep(time);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     static <T> Seq<T> sourceOf(Seq<T> seq) {
