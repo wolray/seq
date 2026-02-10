@@ -12,31 +12,8 @@ import java.util.function.Supplier;
  * @author wolray
  */
 public interface ByteSource extends IOChain.Closable<InputStream> {
-    static ByteSource of(byte[] bytes) {
-        return new ByteSource() {
-            @Override
-            public InputStream call() {
-                return new ByteArrayInputStream(bytes);
-            }
-
-            @Override
-            public byte[] toBytes() {
-                return bytes;
-            }
-
-            @Override
-            public ByteSource cache() {
-                return this;
-            }
-        };
-    }
-
     static ByteSource of(File file) {
         return of(file.toPath());
-    }
-
-    static ByteSource of(Supplier<InputStream> is) {
-        return is::get;
     }
 
     static ByteSource of(Iterable<String> iterable) {
@@ -74,8 +51,31 @@ public interface ByteSource extends IOChain.Closable<InputStream> {
         };
     }
 
+    static ByteSource of(Supplier<InputStream> is) {
+        return is::get;
+    }
+
     static ByteSource of(URL url) {
         return url::openStream;
+    }
+
+    static ByteSource of(byte[] bytes) {
+        return new ByteSource() {
+            @Override
+            public InputStream call() {
+                return new ByteArrayInputStream(bytes);
+            }
+
+            @Override
+            public byte[] toBytes() {
+                return bytes;
+            }
+
+            @Override
+            public ByteSource cache() {
+                return this;
+            }
+        };
     }
 
     static ByteSource of(Iterable<String> iterable, String sep) {
@@ -115,56 +115,8 @@ public interface ByteSource extends IOChain.Closable<InputStream> {
         return new InputPuller(iterator, sep);
     }
 
-    default String asString() {
-        return new String(toBytes(), charset());
-    }
-
     default ByteSource cache() {
         return of(toBytes());
-    }
-
-    default Charset charset() {
-        return Charset.defaultCharset();
-    }
-
-    default byte[] toBytes() {
-        return toBytes(8192);
-    }
-
-    default byte[] toBytes(int bufferSize) {
-        byte[] buff = new byte[bufferSize];
-        List<byte[]> list = new ArrayList<>();
-        int[] total = {0};
-        use(is -> {
-            int len;
-            while ((len = is.read(buff, 0, buff.length)) > 0) {
-                list.add(Arrays.copyOf(buff, len));
-                total[0] += len;
-            }
-        });
-        byte[] res = new byte[total[0]];
-        int pos = 0;
-        for (byte[] bytes : list) {
-            System.arraycopy(bytes, 0, res, pos, bytes.length);
-            pos += bytes.length;
-        }
-        return res;
-    }
-
-    default Seq<String> toLines() {
-        return toReader().toSeq(BufferedReader::readLine);
-    }
-
-    default IOChain<Properties> toProperties() {
-        return toReader().map(r -> {
-            Properties p = new Properties();
-            p.load(r);
-            return p;
-        });
-    }
-
-    default IOChain<BufferedReader> toReader() {
-        return mapClosable(is -> new BufferedReader(new InputStreamReader(is, charset())));
     }
 
     default ByteSource withCharset(Charset charset) {
@@ -192,6 +144,22 @@ public interface ByteSource extends IOChain.Closable<InputStream> {
         };
     }
 
+    default Charset charset() {
+        return Charset.defaultCharset();
+    }
+
+    default IOChain<Properties> toProperties() {
+        return toReader().map(r -> {
+            Properties p = new Properties();
+            p.load(r);
+            return p;
+        });
+    }
+
+    default IOChain<BufferedReader> toReader() {
+        return mapClosable(is -> new BufferedReader(new InputStreamReader(is, charset())));
+    }
+
     default Path write(Path target) {
         use(is -> Files.copy(is, target, StandardCopyOption.REPLACE_EXISTING));
         return target;
@@ -199,6 +167,38 @@ public interface ByteSource extends IOChain.Closable<InputStream> {
 
     default Path writeTemp(String suffix) {
         return IOChain.of(() -> write(Files.createTempFile("", suffix))).get();
+    }
+
+    default Seq<String> toLines() {
+        return toReader().toSeq(BufferedReader::readLine);
+    }
+
+    default String asString() {
+        return new String(toBytes(), charset());
+    }
+
+    default byte[] toBytes() {
+        return toBytes(8192);
+    }
+
+    default byte[] toBytes(int bufferSize) {
+        byte[] buff = new byte[bufferSize];
+        List<byte[]> list = new ArrayList<>();
+        int[] total = {0};
+        use(is -> {
+            int len;
+            while ((len = is.read(buff, 0, buff.length)) > 0) {
+                list.add(Arrays.copyOf(buff, len));
+                total[0] += len;
+            }
+        });
+        byte[] res = new byte[total[0]];
+        int pos = 0;
+        for (byte[] bytes : list) {
+            System.arraycopy(bytes, 0, res, pos, bytes.length);
+            pos += bytes.length;
+        }
+        return res;
     }
 
     class InputPuller extends InputStream {

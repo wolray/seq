@@ -7,20 +7,15 @@ import java.util.function.Predicate;
 /**
  * @author wolray
  */
-public class SeqList<T> extends ArrayList<T> implements ItrSeq<T> {
-    public SeqList(int initialCapacity) {
-        super(initialCapacity);
-    }
-
+public class SeqList<T> extends ArrayList<T> implements SizedSeq<T> {
     public SeqList() {}
 
     public SeqList(Collection<? extends T> c) {
         super(c);
     }
 
-    @Override
-    public int sizeOrDefault() {
-        return size();
+    public SeqList(int initialCapacity) {
+        super(initialCapacity);
     }
 
     public void swap(int i, int j) {

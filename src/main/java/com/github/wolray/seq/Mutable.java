@@ -43,7 +43,7 @@ public class Mutable<T> implements Lazy<T> {
     @Override
     public T set(T value) {
         isSet = true;
-        return this.it = value;
+        return it = value;
     }
 
     @Override

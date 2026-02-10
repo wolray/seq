@@ -8,7 +8,7 @@ import java.util.TreeSet;
 /**
  * @author wolray
  */
-public class TreeSeqSet<T> extends TreeSet<T> implements ItrSeq<T> {
+public class TreeSeqSet<T> extends TreeSet<T> implements SizedSeq<T> {
     public TreeSeqSet() {}
 
     public TreeSeqSet(Comparator<? super T> comparator) {
@@ -21,10 +21,5 @@ public class TreeSeqSet<T> extends TreeSet<T> implements ItrSeq<T> {
 
     public TreeSeqSet(SortedSet<T> s) {
         super(s);
-    }
-
-    @Override
-    public int sizeOrDefault() {
-        return size();
     }
 }

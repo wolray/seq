@@ -43,30 +43,13 @@ public interface Seq<T> {
         };
     }
 
-    static <T> ItrSeq<T> flatIterable(Iterable<Optional<T>> iterable) {
-        return flatOptional(of(iterable));
-    }
-
     @SafeVarargs
     static <T> ItrSeq<T> flatIterable(Iterable<T>... iterables) {
-        return () -> Puller.flatIterable(of(iterables));
+        return () -> ItrSeq.flatIterable(Arrays.asList(iterables));
     }
 
-    static <T> ItrSeq<T> flatOptional(Iterable<Optional<T>> seq) {
-        return () -> new Puller<T>() {
-            final Iterator<Optional<T>> iterator = seq.iterator();
-
-            @Override
-            public boolean hasNext() {
-                while (iterator.hasNext()) {
-                    Optional<T> opt = iterator.next();
-                    if (opt.isPresent()) {
-                        return set(opt.get());
-                    }
-                }
-                return false;
-            }
-        };
+    static <T> ItrSeq<T> flatOptional(Iterable<Optional<T>> iterable) {
+        return ItrSeq.copyIf(iterable, (p, t) -> t.filter(p::set).isPresent());
     }
 
     static <T> ItrSeq<T> gen(Supplier<T> supplier) {
@@ -128,28 +111,19 @@ public interface Seq<T> {
         }
         if (iterable instanceof Collection) {
             Collection<T> collection = (Collection<T>)iterable;
-            return new ItrSeq<T>() {
+            return new SizedSeq<T>() {
                 @Override
                 public Iterator<T> iterator() {
                     return iterable.iterator();
                 }
 
                 @Override
-                public int sizeOrDefault() {
-                    return collection.size();
-                }
-
-                @Override
-                public int count() {
+                public int size() {
                     return collection.size();
                 }
             };
         }
         return iterable::iterator;
-    }
-
-    static <K, V> SeqMap<K, V> of(Map<K, V> map) {
-        return map instanceof SeqMap ? (SeqMap<K, V>)map : new SeqMap<>(map);
     }
 
     static <T> Seq<T> of(Optional<T> optional) {
@@ -378,18 +352,20 @@ public interface Seq<T> {
     }
 
     default Seq<T> dropWhile(Predicate<T> predicate) {
-        return p -> {
-            boolean[] flag = {true};
-            return until(t -> {
-                if (flag[0]) {
+        return p -> until(new Predicate<T>() {
+            boolean flag = true;
+
+            @Override
+            public boolean test(T t) {
+                if (flag) {
                     if (predicate.test(t)) {
                         return false;
                     }
-                    flag[0] = false;
+                    flag = false;
                 }
                 return p.test(t);
-            });
-        };
+            }
+        });
     }
 
     default Seq<T> duplicateAll(int times) {
@@ -466,15 +442,7 @@ public interface Seq<T> {
     }
 
     default Optional<T> find(Predicate<T> predicate) {
-        Mutable<T> m = new Mutable<>(null);
-        until(t -> {
-            if (predicate.test(t)) {
-                m.set(t);
-                return true;
-            }
-            return false;
-        });
-        return m.toOptional();
+        return reduce(Reducer.find(predicate));
     }
 
     default Optional<T> findDuplicate() {
@@ -523,7 +491,7 @@ public interface Seq<T> {
     }
 
     default <K> SeqMap<K, T> groupBy(Function<T, K> toKey, BinaryOperator<T> operator) {
-        return reduce(Reducer.groupBy(toKey, Reducer.of(operator)));
+        return reduce(Reducer.groupBy(toKey, Reducer.fold(operator)));
     }
 
     default <K, V> SeqMap<K, V> groupBy(Function<T, K> toKey, Reducer<T, V> reducer) {
@@ -543,7 +511,7 @@ public interface Seq<T> {
     }
 
     default T last() {
-        return reduce(new Mutable<T>(null), Mutable::set).it;
+        return reduce(Reducer.last());
     }
 
     default Optional<T> last(Predicate<T> predicate) {
@@ -638,7 +606,7 @@ public interface Seq<T> {
     }
 
     default T reduce(BinaryOperator<T> binaryOperator) {
-        return reduce(Reducer.of(binaryOperator));
+        return reduce(Reducer.fold(binaryOperator));
     }
 
     default <E> E reduce(Reducer<T, E> reducer) {
@@ -652,8 +620,8 @@ public interface Seq<T> {
         return des;
     }
 
-    default <E, V> E reduce(Reducer<T, V> reducer, Function<V, E> transformer) {
-        return transformer.apply(reduce(reducer));
+    default <E, V> E reduce(Reducer<T, V> reducer, Function<V, E> function) {
+        return function.apply(reduce(reducer));
     }
 
     default Seq<T> replace(int n, UnaryOperator<T> operator) {

@@ -9,26 +9,12 @@ import java.util.function.*;
  * @author wolray
  */
 public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
-    static <T> ItrSeq<T> empty() {
-        return Collections::emptyIterator;
+    static <T, E> ItrSeq<E> copyIf(Iterable<T> iterable, BiPredicate<Puller<E>, T> predicate) {
+        return () -> copyIf(iterable.iterator(), predicate);
     }
 
-    @Override
-    default ItrSeq<T> asIterable() {
-        return this;
-    }
-
-    @Override
-    default void consume(Consumer<T> consumer) {
-        for (T t : this) {
-            consumer.accept(t);
-        }
-    }
-
-    default <E> ItrSeq<E> copyIf(BiPredicate<Puller<E>, T> predicate) {
-        return () -> new Puller<E>() {
-            final Iterator<T> iterator = iterator();
-
+    static <T, E> Puller<E> copyIf(Iterator<T> iterator, BiPredicate<Puller<E>, T> predicate) {
+        return new Puller<E>() {
             @Override
             public boolean hasNext() {
                 while (iterator.hasNext()) {
@@ -42,10 +28,12 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
         };
     }
 
-    default <E> ItrSeq<E> copyWhile(BiPredicate<Puller<E>, T> predicate) {
-        return () -> new Puller<E>() {
-            final Iterator<T> iterator = iterator();
+    static <T, E> ItrSeq<E> copyWhile(Iterable<T> iterable, BiPredicate<Puller<E>, T> predicate) {
+        return () -> copyWhile(iterable.iterator(), predicate);
+    }
 
+    static <T, E> Puller<E> copyWhile(Iterator<T> iterator, BiPredicate<Puller<E>, T> predicate) {
+        return new Puller<E>() {
             @Override
             public boolean hasNext() {
                 if (iterator.hasNext()) {
@@ -54,6 +42,41 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
                 return false;
             }
         };
+    }
+
+    static <T> ItrSeq<T> empty() {
+        return Collections::emptyIterator;
+    }
+
+    static <T> Puller<T> flatIterable(Iterable<? extends Iterable<T>> iterable) {
+        return new Puller<T>() {
+            final Iterator<? extends Iterable<T>> iterator = iterable.iterator();
+            Iterator<T> cur = Collections.emptyIterator();
+
+            @Override
+            public boolean hasNext() {
+                while (!cur.hasNext()) {
+                    if (iterator.hasNext()) {
+                        cur = iterator.next().iterator();
+                    } else {
+                        return false;
+                    }
+                }
+                return pop(cur);
+            }
+        };
+    }
+
+    @Override
+    default ItrSeq<T> asIterable() {
+        return this;
+    }
+
+    @Override
+    default void consume(Consumer<T> consumer) {
+        for (T t : this) {
+            consumer.accept(t);
+        }
     }
 
     @Override
@@ -97,17 +120,17 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
 
     @Override
     default ItrSeq<T> filter(Predicate<T> predicate) {
-        return predicate == null ? this : copyIf((p, t) -> predicate.test(t) && p.set(t));
+        return predicate == null ? this : copyIf(this, (p, t) -> predicate.test(t) && p.set(t));
     }
 
     @Override
     default ItrSeq<T> filterIndexed(IntObjPredicate<T> predicate) {
-        return predicate == null ? this : copyIf((p, t) -> predicate.test(p.index, t) && p.setAndIncrease(t));
+        return predicate == null ? this : copyIf(this, (p, t) -> predicate.test(p.index, t) && p.setAndIncrease(t));
     }
 
     @Override
     default <E extends T> ItrSeq<E> filterInstance(Class<E> cls) {
-        return copyIf((p, t) -> cls.isInstance(t) && p.set(cls.cast(t)));
+        return copyIf(this, (p, t) -> cls.isInstance(t) && p.set(cls.cast(t)));
     }
 
     @Override
@@ -130,7 +153,7 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
 
     @Override
     default <E> ItrSeq<E> flatIterable(Function<T, Iterable<E>> function) {
-        return () -> Puller.flatIterable(map(function));
+        return () -> flatIterable(map(function));
     }
 
     @Override
@@ -162,17 +185,17 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
 
     @Override
     default <E> ItrSeq<E> mapIndexed(IntObjFunction<T, E> function) {
-        return copyIf((p, t) -> p.setAndIncrease(function.apply(p.index, t)));
+        return copyIf(this, (p, t) -> p.setAndIncrease(function.apply(p.index, t)));
     }
 
     @Override
     default <E> ItrSeq<E> mapMaybe(Function<T, E> function) {
-        return copyIf((p, t) -> t != null && p.set(function.apply(t)));
+        return copyIf(this, (p, t) -> t != null && p.set(function.apply(t)));
     }
 
     @Override
     default <E> ItrSeq<E> mapNotNull(Function<T, E> function) {
-        return copyIf((p, t) -> {
+        return copyIf(this, (p, t) -> {
             E e = function.apply(t);
             return e != null && p.set(e);
         });
@@ -198,17 +221,17 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
 
     @Override
     default ItrSeq<T> take(int n) {
-        return n <= 0 ? ItrSeq.empty() : copyWhile((p, t) -> p.index < n && p.setAndIncrease(t));
+        return n <= 0 ? ItrSeq.empty() : copyWhile(this, (p, t) -> p.index < n && p.setAndIncrease(t));
     }
 
     @Override
     default ItrSeq<T> takeWhile(Predicate<T> predicate) {
-        return copyWhile((p, t) -> predicate.test(t) && p.set(t));
+        return copyWhile(this, (p, t) -> predicate.test(t) && p.set(t));
     }
 
     @Override
     default ItrSeq<T> takeWhile(BiPredicate<T, T> testPrevCurr) {
-        return copyWhile((p, t) -> (p.index == 0 || testPrevCurr.test(p.next, t)) && p.setAndIncrease(t));
+        return copyWhile(this, (p, t) -> (p.index == 0 || testPrevCurr.test(p.next, t)) && p.setAndIncrease(t));
     }
 
     default <E> ItrSeq<T> takeWhile(Function<T, E> function, BiPredicate<E, E> testPrevCurr) {

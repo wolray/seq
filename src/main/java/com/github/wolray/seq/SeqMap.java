@@ -11,36 +11,20 @@ import java.util.function.Function;
 public class SeqMap<K, V> extends LinkedHashMap<K, V> {
     public SeqMap() {}
 
-    public SeqMap(int initialCapacity) {
-        super(initialCapacity);
-    }
-
     public SeqMap(Map<? extends K, ? extends V> m) {
         super(m);
     }
 
-    public <T> SeqMap<T, V> mapKeys(Function<K, T> toKey) {
-        SeqMap<T, V> res = new SeqMap<>(size());
-        forEach((k, v) -> res.put(toKey.apply(k), v));
-        return res;
+    public SeqMap(int initialCapacity) {
+        super(initialCapacity);
     }
 
-    public <T> SeqMap<T, V> mapKeys(BiFunction<K, V, T> toKey) {
-        SeqMap<T, V> res = new SeqMap<>(size());
-        forEach((k, v) -> res.put(toKey.apply(k, v), v));
-        return res;
+    public static <K, V> SeqMap<K, V> of(Map<K, V> map) {
+        return map instanceof SeqMap ? (SeqMap<K, V>)map : new SeqMap<>(map);
     }
 
-    public <T> SeqMap<K, T> mapValues(Function<V, T> toValue) {
-        SeqMap<K, T> res = new SeqMap<>(size());
-        forEach((k, v) -> res.put(k, toValue.apply(v)));
-        return res;
-    }
-
-    public <T> SeqMap<K, T> mapValues(BiFunction<K, V, T> toValue) {
-        SeqMap<K, T> res = new SeqMap<>(size());
-        forEach((k, v) -> res.put(k, toValue.apply(k, v)));
-        return res;
+    public ItrSeq<Map.Entry<K, V>> seqOfEntries() {
+        return Seq.of(entrySet());
     }
 
     public ItrSeq<K> seqOfKeys() {
@@ -51,7 +35,27 @@ public class SeqMap<K, V> extends LinkedHashMap<K, V> {
         return Seq.of(values());
     }
 
-    public ItrSeq<Map.Entry<K, V>> seqOfEntries() {
-        return Seq.of(entrySet());
+    public <T> SeqMap<T, V> mapKeys(BiFunction<K, V, T> toKey) {
+        SeqMap<T, V> res = new SeqMap<>(size());
+        forEach((k, v) -> res.put(toKey.apply(k, v), v));
+        return res;
+    }
+
+    public <T> SeqMap<T, V> mapKeys(Function<K, T> toKey) {
+        SeqMap<T, V> res = new SeqMap<>(size());
+        forEach((k, v) -> res.put(toKey.apply(k), v));
+        return res;
+    }
+
+    public <T> SeqMap<K, T> mapValues(BiFunction<K, V, T> toValue) {
+        SeqMap<K, T> res = new SeqMap<>(size());
+        forEach((k, v) -> res.put(k, toValue.apply(k, v)));
+        return res;
+    }
+
+    public <T> SeqMap<K, T> mapValues(Function<V, T> toValue) {
+        SeqMap<K, T> res = new SeqMap<>(size());
+        forEach((k, v) -> res.put(k, toValue.apply(v)));
+        return res;
     }
 }

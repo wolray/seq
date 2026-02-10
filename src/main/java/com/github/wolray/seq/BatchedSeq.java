@@ -8,7 +8,7 @@ import java.util.function.Predicate;
 /**
  * @author wolray
  */
-public class BatchedSeq<T> implements ItrSeq<T> {
+public class BatchedSeq<T> implements SizedSeq<T> {
     private transient int batchSize = 10;
     private transient final LinkedList<ArrayList<T>> list = new LinkedList<>();
     private transient int size;
@@ -28,14 +28,10 @@ public class BatchedSeq<T> implements ItrSeq<T> {
 
     @Override
     public Iterator<T> iterator() {
-        return Puller.flatIterable(Seq.of(list));
+        return ItrSeq.flatIterable(list);
     }
 
     @Override
-    public int sizeOrDefault() {
-        return size;
-    }
-
     public int size() {
         return size;
     }

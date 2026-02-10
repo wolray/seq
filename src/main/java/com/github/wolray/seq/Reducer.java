@@ -92,6 +92,26 @@ public interface Reducer<T, V> {
         };
     }
 
+    static <T> Reducer<T, Optional<T>> find(Predicate<T> predicate) {
+        return () -> new Worker<T, Optional<T>>() {
+            boolean isSet;
+            T value;
+
+            @Override
+            public void accept(T t) {
+                if (predicate.test(t)) {
+                    isSet = true;
+                    value = t;
+                }
+            }
+
+            @Override
+            public Optional<T> result() {
+                return isSet ? Optional.ofNullable(value) : Optional.empty();
+            }
+        };
+    }
+
     static <T> Reducer<T, T> first() {
         return () -> new Worker<T, T>() {
             boolean flag = true;
@@ -108,6 +128,38 @@ public interface Reducer<T, V> {
             @Override
             public T result() {
                 return value;
+            }
+        };
+    }
+
+    static <T> Reducer<T, T> fold(BinaryOperator<T> operator) {
+        return () -> new Worker<T, T>() {
+            T cur = null;
+
+            @Override
+            public void accept(T t) {
+                cur = cur == null ? t : operator.apply(cur, t);
+            }
+
+            @Override
+            public T result() {
+                return cur;
+            }
+        };
+    }
+
+    static <T> Reducer<T, T> fold(T seed, BinaryOperator<T> operator) {
+        return () -> new Worker<T, T>() {
+            T cur = seed;
+
+            @Override
+            public void accept(T t) {
+                cur = operator.apply(cur, t);
+            }
+
+            @Override
+            public T result() {
+                return cur;
             }
         };
     }
@@ -192,6 +244,22 @@ public interface Reducer<T, V> {
             @Override
             public V result() {
                 return worker.result();
+            }
+        };
+    }
+
+    static <T, V, E> Reducer<T, E> mapping(Reducer<T, V> reducer, Function<V, E> mapper) {
+        return () -> new Worker<T, E>() {
+            final Worker<T, V> worker = reducer.get();
+
+            @Override
+            public void accept(T t) {
+                worker.accept(t);
+            }
+
+            @Override
+            public E result() {
+                return mapper.apply(worker.result());
             }
         };
     }
@@ -419,38 +487,6 @@ public interface Reducer<T, V> {
         };
     }
 
-    static <T> Reducer<T, T> of(BinaryOperator<T> operator) {
-        return () -> new Worker<T, T>() {
-            T cur = null;
-
-            @Override
-            public void accept(T t) {
-                cur = cur == null ? t : operator.apply(cur, t);
-            }
-
-            @Override
-            public T result() {
-                return cur;
-            }
-        };
-    }
-
-    static <T, V, E> Reducer<T, E> of(Reducer<T, V> reducer, Function<V, E> function) {
-        return () -> new Worker<T, E>() {
-            final Worker<T, V> worker = reducer.get();
-
-            @Override
-            public void accept(T t) {
-                worker.accept(t);
-            }
-
-            @Override
-            public E result() {
-                return function.apply(worker.result());
-            }
-        };
-    }
-
     static <T, V> Reducer<T, V> of(Supplier<V> supplier, BiConsumer<V, T> accumulator) {
         return () -> new Worker<T, V>() {
             final V v = supplier.get();
@@ -537,6 +573,22 @@ public interface Reducer<T, V> {
         return sort(Comparator.comparing(function).reversed());
     }
 
+    static Reducer<Double, Double> sum() {
+        return () -> new Worker<Double, Double>() {
+            double s = 0;
+
+            @Override
+            public void accept(Double t) {
+                s += t;
+            }
+
+            @Override
+            public Double result() {
+                return s;
+            }
+        };
+    }
+
     static <T> Reducer<T, Double> sum(ToDoubleFunction<T> function) {
         return () -> new Worker<T, Double>() {
             double s = 0;
@@ -553,6 +605,22 @@ public interface Reducer<T, V> {
         };
     }
 
+    static Reducer<Integer, Integer> sumInt() {
+        return () -> new Worker<Integer, Integer>() {
+            int s = 0;
+
+            @Override
+            public void accept(Integer t) {
+                s += t;
+            }
+
+            @Override
+            public Integer result() {
+                return s;
+            }
+        };
+    }
+
     static <T> Reducer<T, Integer> sumInt(ToIntFunction<T> function) {
         return () -> new Worker<T, Integer>() {
             int s = 0;
@@ -564,6 +632,22 @@ public interface Reducer<T, V> {
 
             @Override
             public Integer result() {
+                return s;
+            }
+        };
+    }
+
+    static Reducer<Long, Long> sumLong() {
+        return () -> new Worker<Long, Long>() {
+            long s = 0;
+
+            @Override
+            public void accept(Long t) {
+                s += t;
+            }
+
+            @Override
+            public Long result() {
                 return s;
             }
         };

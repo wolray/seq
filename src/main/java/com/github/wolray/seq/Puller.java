@@ -1,6 +1,5 @@
 package com.github.wolray.seq;
 
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -9,27 +8,8 @@ import java.util.function.Function;
  * @author wolray
  */
 public abstract class Puller<T> implements Iterator<T> {
-    int index = 0;
-    T next;
-
-    static <T> Puller<T> flatIterable(Iterable<? extends Iterable<T>> iterable) {
-        return new Puller<T>() {
-            final Iterator<? extends Iterable<T>> iterator = iterable.iterator();
-            Iterator<T> cur = Collections.emptyIterator();
-
-            @Override
-            public boolean hasNext() {
-                while (!cur.hasNext()) {
-                    if (iterator.hasNext()) {
-                        cur = iterator.next().iterator();
-                    } else {
-                        return false;
-                    }
-                }
-                return pop(cur);
-            }
-        };
-    }
+    protected int index = 0;
+    protected T next;
 
     public static <T, E> Puller<E> map(Iterator<T> iterator, Function<T, E> function) {
         return new Puller<E>() {
