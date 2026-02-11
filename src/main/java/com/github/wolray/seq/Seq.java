@@ -201,6 +201,17 @@ public interface Seq<T> {
         });
     }
 
+    default void consumeIndexed(IntObjConsumer<T> consumer) {
+        consume(new Consumer<T>() {
+            int index = 0;
+
+            @Override
+            public void accept(T t) {
+                consumer.accept(index++, t);
+            }
+        });
+    }
+
     default void printAll(String sep) {
         if ("\n".equals(sep)) {
             println();
@@ -213,19 +224,19 @@ public interface Seq<T> {
         consume(System.out::println);
     }
 
-    default <E> void zip(Iterable<E> iterable, BiConsumer<T, E> consumer) {
+    default <E> Seq2<T, E> zip(Iterable<E> iterable) {
+        return p -> zip(iterable, p);
+    }
+
+    default <E> boolean zip(Iterable<E> iterable, BiPredicate<T, E> predicate) {
         Iterator<E> iterator = iterable.iterator();
-        until(t -> {
+        return until(t -> {
             if (iterator.hasNext()) {
-                consumer.accept(t, iterator.next());
+                predicate.test(t, iterator.next());
                 return false;
             }
             return true;
         });
-    }
-
-    default BatchedSeq<T> cache() {
-        return toBatched();
     }
 
     default BatchedSeq<T> toBatched() {
@@ -410,7 +421,7 @@ public interface Seq<T> {
     }
 
     default Seq<T> drop(int n) {
-        return n <= 0 ? this : p -> consumeIndexed((i, t) -> i >= n && p.test(t));
+        return n <= 0 ? this : p -> untilIndexed((i, t) -> i >= n && p.test(t));
     }
 
     default Seq<T> dropWhile(Predicate<T> predicate) {
@@ -480,7 +491,7 @@ public interface Seq<T> {
     }
 
     default Seq<T> filterIndexed(IntObjPredicate<T> predicate) {
-        return p -> consumeIndexed((i, t) -> predicate.test(i, t) && p.test(t));
+        return p -> untilIndexed((i, t) -> predicate.test(i, t) && p.test(t));
     }
 
     default <E extends T> Seq<E> filterInstance(Class<E> cls) {
@@ -527,7 +538,7 @@ public interface Seq<T> {
     }
 
     default <E> Seq<E> mapIndexed(IntObjFunction<T, E> function) {
-        return p -> consumeIndexed((i, t) -> p.test(function.apply(i, t)));
+        return p -> untilIndexed((i, t) -> p.test(function.apply(i, t)));
     }
 
     default <E> Seq<E> mapMaybe(Function<T, E> function) {
@@ -542,14 +553,14 @@ public interface Seq<T> {
     }
 
     default Seq<T> onEach(Consumer<T> consumer) {
-        return map(t -> {
+        return p -> until(t -> {
             consumer.accept(t);
-            return t;
+            return p.test(t);
         });
     }
 
     default Seq<T> onEachIndexed(IntObjConsumer<T> consumer) {
-        return p -> consumeIndexed((i, t) -> {
+        return p -> untilIndexed((i, t) -> {
             consumer.accept(i, t);
             return p.test(t);
         });
@@ -717,20 +728,15 @@ public interface Seq<T> {
     }
 
     default Seq<IntPair<T>> withIndex() {
-        return p -> consumeIndexed((i, t) -> p.test(new IntPair<>(i, t)));
+        return p -> untilIndexed((i, t) -> p.test(new IntPair<>(i, t)));
+    }
+
+    default Seq<T> zip(T t) {
+        return p -> until(o -> p.test(o) || p.test(t));
     }
 
     default <E, R> Seq<R> zipBy(Iterable<E> iterable, BiFunction<T, E, R> function) {
-        return p -> {
-            Iterator<E> iterator = iterable.iterator();
-            return until(t -> {
-                if (iterator.hasNext()) {
-                    return p.test(function.apply(t, iterator.next()));
-                } else {
-                    return true;
-                }
-            });
-        };
+        return zip(iterable).map(function);
     }
 
     default SeqList<T> reverse() {
@@ -799,12 +805,16 @@ public interface Seq<T> {
         return reduce(Reducer.toSet(sizeOrDefault()));
     }
 
+    default SizedSeq<T> cache() {
+        return toBatched();
+    }
+
     default String join(String sep) {
         return join(sep, Object::toString);
     }
 
     default String join(String sep, Function<T, String> function) {
-        return reduce(new StringJoiner(sep), (j, t) -> j.add(function.apply(t))).toString();
+        return reduce(Reducer.join(sep, function));
     }
 
     default T first() {
@@ -833,24 +843,10 @@ public interface Seq<T> {
     }
 
     default T[] toObjArray(IntFunction<T[]> initializer) {
-        BatchedSeq<T> ts = cache();
+        SizedSeq<T> ts = cache();
         T[] a = initializer.apply(ts.size());
-        ts.consumeIndexed((i, t) -> {
-            a[i] = t;
-            return false;
-        });
+        ts.consumeIndexed((i, t) -> a[i] = t);
         return a;
-    }
-
-    default boolean consumeIndexed(IntObjPredicate<T> predicate) {
-        return until(new Predicate<T>() {
-            int index = 0;
-
-            @Override
-            public boolean test(T t) {
-                return predicate.test(index++, t);
-            }
-        });
     }
 
     default boolean matchAll(Predicate<T> predicate) {
@@ -869,8 +865,19 @@ public interface Seq<T> {
         return !find(predicate).isPresent();
     }
 
+    default boolean untilIndexed(IntObjPredicate<T> predicate) {
+        return until(new Predicate<T>() {
+            int index = 0;
+
+            @Override
+            public boolean test(T t) {
+                return predicate.test(index++, t);
+            }
+        });
+    }
+
     default boolean[] toBooleanArray(Predicate<T> function) {
-        BatchedSeq<T> ts = cache();
+        SizedSeq<T> ts = cache();
         boolean[] a = new boolean[ts.size()];
         ts.consumeIndexed((i, t) -> a[i] = function.test(t));
         return a;
@@ -889,12 +896,9 @@ public interface Seq<T> {
     }
 
     default double[] toDoubleArray(ToDoubleFunction<T> function) {
-        BatchedSeq<T> ts = cache();
+        SizedSeq<T> ts = cache();
         double[] a = new double[ts.size()];
-        ts.consumeIndexed((i, t) -> {
-            a[i] = function.applyAsDouble(t);
-            return false;
-        });
+        ts.consumeIndexed((i, t) -> a[i] = function.applyAsDouble(t));
         return a;
     }
 
@@ -919,12 +923,9 @@ public interface Seq<T> {
     }
 
     default int[] toIntArray(ToIntFunction<T> function) {
-        BatchedSeq<T> ts = cache();
+        SizedSeq<T> ts = cache();
         int[] a = new int[ts.size()];
-        ts.consumeIndexed((i, t) -> {
-            a[i] = function.applyAsInt(t);
-            return false;
-        });
+        ts.consumeIndexed((i, t) -> a[i] = function.applyAsInt(t));
         return a;
     }
 
@@ -933,12 +934,9 @@ public interface Seq<T> {
     }
 
     default long[] toLongArray(ToLongFunction<T> function) {
-        BatchedSeq<T> ts = cache();
+        SizedSeq<T> ts = cache();
         long[] a = new long[ts.size()];
-        ts.consumeIndexed((i, t) -> {
-            a[i] = function.applyAsLong(t);
-            return false;
-        });
+        ts.consumeIndexed((i, t) -> a[i] = function.applyAsLong(t));
         return a;
     }
 
@@ -952,10 +950,5 @@ public interface Seq<T> {
 
     interface IntObjPredicate<T> {
         boolean test(int i, T t);
-    }
-
-    class Empty {
-        static final Consumer<Object> nothing = t -> {
-        };
     }
 }

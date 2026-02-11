@@ -170,7 +170,7 @@ public interface Reducer<T, V> {
 
             @Override
             public void accept(T t) {
-                map.computeIfAbsent(toKey.apply(t), k -> reducer.get()).accept(t);
+                map.getOrCompute(toKey.apply(t), reducer::get).accept(t);
             }
 
             @Override
@@ -232,13 +232,13 @@ public interface Reducer<T, V> {
         return mapping(mapper, toList());
     }
 
-    static <T, E, V> Reducer<T, V> mapping(Function<T, E> mapper, Reducer<E, V> reducer) {
+    static <T, E, V> Reducer<T, V> mapping(Function<T, E> before, Reducer<E, V> reducer) {
         return () -> new Worker<T, V>() {
             final Worker<E, V> worker = reducer.get();
 
             @Override
             public void accept(T t) {
-                worker.accept(mapper.apply(t));
+                worker.accept(before.apply(t));
             }
 
             @Override
@@ -248,7 +248,7 @@ public interface Reducer<T, V> {
         };
     }
 
-    static <T, V, E> Reducer<T, E> mapping(Reducer<T, V> reducer, Function<V, E> mapper) {
+    static <T, V, E> Reducer<T, E> mapping(Reducer<T, V> reducer, Function<V, E> after) {
         return () -> new Worker<T, E>() {
             final Worker<T, V> worker = reducer.get();
 
@@ -259,7 +259,7 @@ public interface Reducer<T, V> {
 
             @Override
             public E result() {
-                return mapper.apply(worker.result());
+                return after.apply(worker.result());
             }
         };
     }
@@ -546,7 +546,7 @@ public interface Reducer<T, V> {
     }
 
     static <T> Reducer<T, SeqList<T>> reverse() {
-        return Reducer.<T>toList().then(Collections::reverse);
+        return then(toList(), Collections::reverse);
     }
 
     static <T> Reducer<T, SeqList<T>> sort() {
@@ -554,7 +554,7 @@ public interface Reducer<T, V> {
     }
 
     static <T> Reducer<T, SeqList<T>> sort(Comparator<T> comparator) {
-        return Reducer.<T>toList().then(ts -> ts.sort(comparator));
+        return then(toList(), ts -> ts.sort(comparator));
     }
 
     static <T, V extends Comparable<V>> Reducer<T, SeqList<T>> sort(Function<T, V> function) {
@@ -669,6 +669,24 @@ public interface Reducer<T, V> {
         };
     }
 
+    static <T, V> Reducer<T, V> then(Reducer<T, V> reducer, Consumer<V> action) {
+        return () -> new Worker<T, V>() {
+            final Worker<T, V> worker = reducer.get();
+
+            @Override
+            public void accept(T t) {
+                worker.accept(t);
+            }
+
+            @Override
+            public V result() {
+                V res = worker.result();
+                action.accept(res);
+                return res;
+            }
+        };
+    }
+
     static <T> Reducer<T, BatchedSeq<T>> toBatched() {
         return of(BatchedSeq::new, BatchedSeq::add);
     }
@@ -719,25 +737,6 @@ public interface Reducer<T, V> {
 
     static <T> Reducer<T, SeqSet<T>> toSet(int initialCapacity) {
         return of(() -> new SeqSet<>(initialCapacity), Set::add);
-    }
-
-    default Reducer<T, V> then(Consumer<V> action) {
-        Reducer<T, V> reducer = this;
-        return () -> new Worker<T, V>() {
-            final Worker<T, V> worker = reducer.get();
-
-            @Override
-            public void accept(T t) {
-                worker.accept(t);
-            }
-
-            @Override
-            public V result() {
-                V res = worker.result();
-                action.accept(res);
-                return res;
-            }
-        };
     }
 
     interface Worker<T, V> {

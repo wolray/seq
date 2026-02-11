@@ -9,6 +9,11 @@ public interface SizedSeq<T> extends ItrSeq<T> {
     }
 
     @Override
+    default SizedSeq<T> cache() {
+        return this;
+    }
+
+    @Override
     default ItrSeq<T> take(int n) {
         return n >= size() ? this : ItrSeq.super.take(n);
     }

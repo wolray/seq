@@ -2,7 +2,10 @@ package com.github.wolray.seq;
 
 import org.junit.Test;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -86,8 +89,8 @@ public class SeqTest {
         Seq<Integer> seq2 = Seq.of(0, 2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
         assert seq1.groupBy(i -> i / 4).toString().equals("{0=[0, 2, 1, 3], 1=[4, 6, 5, 7], 2=[10, 11], 3=[12]}");
         assert seq2.groupBy(i -> i / 4).toString().equals("{0=[0, 2, 1, 3], 1=[4, 6, 5, 7], 2=[10, 11], 3=[12]}");
-        assert seq1.groupBy(i -> i / 4, Integer::sum).toString().equals("{0=6, 1=22, 2=21, 3=12}");
-        assert seq2.groupBy(i -> i / 4, Integer::sum).toString().equals("{0=6, 1=22, 2=21, 3=12}");
+        assert seq1.groupBy(i -> i / 4, Reducer.sumInt()).toString().equals("{0=6, 1=22, 2=21, 3=12}");
+        assert seq2.groupBy(i -> i / 4, Reducer.sumInt()).toString().equals("{0=6, 1=22, 2=21, 3=12}");
     }
 
     @Test
@@ -221,7 +224,7 @@ public class SeqTest {
 
     @Test
     public void testTreeSeq() {
-        Map<Integer, Integer> map = new HashMap<>();
+        SeqMap<Integer, Integer> map = new SeqMap<>();
         map.put(1, 0);
         map.put(2, 0);
         map.put(3, 1);
@@ -231,8 +234,7 @@ public class SeqTest {
         map.put(8, 7);
         map.put(9, 8);
         map.put(10, 9);
-        Map<Integer, List<Integer>> tree = new HashMap<>();
-        map.forEach((n, p) -> tree.computeIfAbsent(p, k -> new ArrayList<>()).add(n));
+        SeqMap<Integer, SeqList<Integer>> tree = map.swap().groupBy();
         TreeSeq<Integer> seq = new TreeSeq<>(0, n -> {
             List<Integer> list = tree.get(n);
             return list != null ? list.iterator() : Collections.emptyIterator();
