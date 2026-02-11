@@ -91,21 +91,13 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
     }
 
     @Override
+    default <E> ItrSeq<E> mapIf(BiPredicate<Predicate<E>, T> predicate) {
+        return copyIf(this, predicate::test);
+    }
+
+    @Override
     default <E> ItrSeq<E> mapIndexed(IntObjFunction<T, E> function) {
         return copyIf(this, (p, t) -> p.setAndIncrease(function.apply(p.index, t)));
-    }
-
-    @Override
-    default <E> ItrSeq<E> mapMaybe(Function<T, E> function) {
-        return copyIf(this, (p, t) -> t != null && p.set(function.apply(t)));
-    }
-
-    @Override
-    default <E> ItrSeq<E> mapNotNull(Function<T, E> function) {
-        return copyIf(this, (p, t) -> {
-            E e = function.apply(t);
-            return e != null && p.set(e);
-        });
     }
 
     @Override

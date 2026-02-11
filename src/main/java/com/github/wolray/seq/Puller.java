@@ -3,11 +3,12 @@ package com.github.wolray.seq;
 import java.util.Iterator;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * @author wolray
  */
-public abstract class Puller<T> implements Iterator<T> {
+public abstract class Puller<T> implements Iterator<T>, Predicate<T> {
     protected T next;
     protected int index = 0;
 
@@ -21,6 +22,12 @@ public abstract class Puller<T> implements Iterator<T> {
         while (hasNext()) {
             action.accept(next);
         }
+    }
+
+    @Override
+    public boolean test(T t) {
+        next = t;
+        return true;
     }
 
     public static <T, E> Puller<E> map(Iterator<T> iterator, Function<T, E> function) {

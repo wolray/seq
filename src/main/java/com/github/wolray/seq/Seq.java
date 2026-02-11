@@ -224,21 +224,6 @@ public interface Seq<T> {
         consume(System.out::println);
     }
 
-    default <E> Seq2<T, E> zip(Iterable<E> iterable) {
-        return p -> zip(iterable, p);
-    }
-
-    default <E> boolean zip(Iterable<E> iterable, BiPredicate<T, E> predicate) {
-        Iterator<E> iterator = iterable.iterator();
-        return until(t -> {
-            if (iterator.hasNext()) {
-                predicate.test(t, iterator.next());
-                return false;
-            }
-            return true;
-        });
-    }
-
     default BatchedSeq<T> toBatched() {
         return reduce(new BatchedSeq<>(), BatchedSeq::add);
     }
@@ -537,19 +522,12 @@ public interface Seq<T> {
         return p -> until(t -> p.test(function.apply(t)));
     }
 
+    default <E> Seq<E> mapIf(BiPredicate<Predicate<E>, T> predicate) {
+        return p -> until(t -> predicate.test(p, t));
+    }
+
     default <E> Seq<E> mapIndexed(IntObjFunction<T, E> function) {
         return p -> untilIndexed((i, t) -> p.test(function.apply(i, t)));
-    }
-
-    default <E> Seq<E> mapMaybe(Function<T, E> function) {
-        return p -> until(t -> t != null && p.test(function.apply(t)));
-    }
-
-    default <E> Seq<E> mapNotNull(Function<T, E> function) {
-        return p -> until(t -> {
-            E e = function.apply(t);
-            return e != null && p.test(e);
-        });
     }
 
     default Seq<T> onEach(Consumer<T> consumer) {
@@ -582,15 +560,11 @@ public interface Seq<T> {
     }
 
     default <E extends Comparable<E>> Seq<T> sortCached(Function<T, E> function) {
-        return map(t -> new Pair<>(t, function.apply(t)))
-            .sortBy(p -> p.second)
-            .map(p -> p.first);
+        return map(t -> new Pair<>(t, function.apply(t))).sortBy(p -> p.second).map(p -> p.first);
     }
 
     default <E extends Comparable<E>> Seq<T> sortCachedDesc(Function<T, E> function) {
-        return map(t -> new Pair<>(t, function.apply(t)))
-            .sortByDesc(p -> p.second)
-            .map(p -> p.first);
+        return map(t -> new Pair<>(t, function.apply(t))).sortByDesc(p -> p.second).map(p -> p.first);
     }
 
     default Seq<T> take(int n) {
@@ -736,7 +710,43 @@ public interface Seq<T> {
     }
 
     default <E, R> Seq<R> zipBy(Iterable<E> iterable, BiFunction<T, E, R> function) {
-        return zip(iterable).map(function);
+        return zip(iterable).mapTo(function);
+    }
+
+    default Seq2<T, T> mapPair(boolean overlapping) {
+        return p -> until(new Predicate<T>() {
+            boolean flag;
+            T last = null;
+
+            @Override
+            public boolean test(T t) {
+                if (flag && p.test(last, t)) {
+                    return true;
+                }
+                flag = overlapping || !flag;
+                last = t;
+                return false;
+            }
+        });
+    }
+
+    default <K, V> Seq2<K, V> pair(BiPredicate<BiPredicate<K, V>, T> predicate) {
+        return p -> until(t -> predicate.test(p, t));
+    }
+
+    default <E> Seq2<E, T> pairBy(Function<T, E> function) {
+        return p -> until(t -> p.test(function.apply(t), t));
+    }
+
+    default <E> Seq2<T, E> pairWith(Function<T, E> function) {
+        return p -> until(t -> p.test(t, function.apply(t)));
+    }
+
+    default <E> Seq2<T, E> zip(Iterable<E> iterable) {
+        return p -> {
+            Iterator<E> iterator = iterable.iterator();
+            return until(t -> !iterator.hasNext() || p.test(t, iterator.next()));
+        };
     }
 
     default SeqList<T> reverse() {
@@ -818,12 +828,7 @@ public interface Seq<T> {
     }
 
     default T first() {
-        Mutable<T> m = new Mutable<>(null);
-        until(t -> {
-            m.it = t;
-            return true;
-        });
-        return m.it;
+        return reduce(Reducer.first());
     }
 
     default T last() {
@@ -862,7 +867,7 @@ public interface Seq<T> {
     }
 
     default boolean matchNone(Predicate<T> predicate) {
-        return !find(predicate).isPresent();
+        return !matchAny(predicate);
     }
 
     default boolean untilIndexed(IntObjPredicate<T> predicate) {
@@ -911,7 +916,7 @@ public interface Seq<T> {
     }
 
     default int countNot(Predicate<T> predicate) {
-        return reduce(Reducer.countNot(predicate));
+        return reduce(Reducer.count(predicate.negate()));
     }
 
     default int sizeOrDefault() {

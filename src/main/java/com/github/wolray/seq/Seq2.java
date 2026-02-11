@@ -81,12 +81,20 @@ public interface Seq2<K, V> {
         });
     }
 
-    default <T> Seq<T> map(BiFunction<K, V, T> function) {
+    default <A, B> Seq2<A, B> map(Predicate3<BiPredicate<A, B>, K, V> predicate) {
+        return p -> until((k, v) -> predicate.test(p, k, v));
+    }
+
+    default <T> Seq<T> mapTo(Predicate3<Predicate<T>, K, V> predicate) {
+        return p -> until((k, v) -> predicate.test(p, k, v));
+    }
+
+    default <T> Seq<T> mapTo(BiFunction<K, V, T> function) {
         return p -> until((k, v) -> p.test(function.apply(k, v)));
     }
 
     default Seq<Pair<K, V>> paired() {
-        return map(Pair::new);
+        return mapTo(Pair::new);
     }
 
     default Seq<K> toKeys() {
@@ -98,8 +106,8 @@ public interface Seq2<K, V> {
     }
 
     default Seq2<K, V> cache() {
-        Seq<Pair<K, V>> pairSeq = paired().cache();
-        return p -> pairSeq.until(pair -> p.test(pair.first, pair.second));
+        Seq<Pair<K, V>> seq = paired().cache();
+        return p -> seq.until(pair -> p.test(pair.first, pair.second));
     }
 
     default Seq2<K, V> filter(BiPredicate<K, V> predicate) {

@@ -9,6 +9,28 @@ import java.util.regex.Pattern;
 public interface Splitter {
     Seq<String> split(String s);
 
+    static Seq2<String, String> parsePairs(char[] chars, char entrySep, char kvSep) {
+        return p -> {
+            int len = chars.length, last = 0;
+            String prev = null;
+            for (int i = 0; i < len; i++) {
+                if (chars[i] == entrySep) {
+                    if (prev != null) {
+                        if (p.test(prev, substring(chars, last, i))) {
+                            return true;
+                        }
+                        prev = null;
+                    }
+                    last = i + 1;
+                } else if (prev == null && chars[i] == kvSep) {
+                    prev = substring(chars, last, i);
+                    last = i + 1;
+                }
+            }
+            return prev != null && p.test(prev, substring(chars, last, len));
+        };
+    }
+
     static Splitter of(Pattern sep) {
         return s -> {
             char[] chars = s.toCharArray();
@@ -74,27 +96,5 @@ public interface Splitter {
 
     static String substring(char[] chars, int start, int end) {
         return start < end ? new String(chars, start, end - start) : "";
-    }
-
-    static Seq2<String, String> parsePair(char[] chars, char entrySep, char kvSep) {
-        return p -> {
-            int len = chars.length, last = 0;
-            String prev = null;
-            for (int i = 0; i < len; i++) {
-                if (chars[i] == entrySep) {
-                    if (prev != null) {
-                        if (p.test(prev, substring(chars, last, i))) {
-                            return true;
-                        }
-                        prev = null;
-                    }
-                    last = i + 1;
-                } else if (prev == null && chars[i] == kvSep) {
-                    prev = substring(chars, last, i);
-                    last = i + 1;
-                }
-            }
-            return prev != null && p.test(prev, substring(chars, last, len));
-        };
     }
 }

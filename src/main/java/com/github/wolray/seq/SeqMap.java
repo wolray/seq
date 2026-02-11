@@ -32,6 +32,11 @@ public class SeqMap<K, V> extends LinkedHashMap<K, V> implements Seq2<K, V> {
     }
 
     @Override
+    public SeqMap<K, V> cache() {
+        return this;
+    }
+
+    @Override
     public <T> SeqMap<T, V> mapKeys(BiFunction<K, V, T> toKey) {
         SeqMap<T, V> res = new SeqMap<>(size());
         forEach((k, v) -> res.put(toKey.apply(k, v), v));
