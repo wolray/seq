@@ -100,6 +100,19 @@ public interface Seq<T> {
         };
     }
 
+    static ItrSeq<Integer> range(int start, int stop) {
+        return () -> new Puller<Integer>() {
+            {
+                index = start;
+            }
+
+            @Override
+            public boolean hasNext() {
+                return index < stop && setAndIncrease(index);
+            }
+        };
+    }
+
     static <T> ItrSeq<T> repeat(int n, T t) {
         return () -> new Puller<T>() {
             @Override
@@ -157,10 +170,6 @@ public interface Seq<T> {
             }
             return false;
         };
-    }
-
-    static <T> Seq<T> of(Optional<T> optional) {
-        return p -> optional.filter(p).isPresent();
     }
 
     static Seq<Object> ofJson(Object node) {
@@ -668,21 +677,24 @@ public interface Seq<T> {
         if (timeMillis <= 0) {
             throw new IllegalArgumentException("non-positive time");
         }
-        return p -> {
-            LongPair<Reducer.Worker<T, V>> pair = new LongPair<>(System.currentTimeMillis(), reducer.get());
-            return until(t -> {
+        return p -> until(new Predicate<T>() {
+            long last = System.currentTimeMillis();
+            Reducer.Worker<T, V> worker = reducer.get();
+
+            @Override
+            public boolean test(T t) {
                 long now = System.currentTimeMillis();
-                if (now - pair.longVal > timeMillis) {
-                    pair.longVal = now;
-                    if (p.test(pair.it.result())) {
+                if (now - last > timeMillis) {
+                    last = now;
+                    if (p.test(worker.result())) {
                         return true;
                     }
-                    pair.it = reducer.get();
+                    worker = reducer.get();
                 }
-                pair.it.accept(t);
+                worker.accept(t);
                 return false;
-            });
-        };
+            }
+        });
     }
 
     default Seq<IntPair<T>> withInt(ToIntFunction<T> function) {
@@ -710,10 +722,22 @@ public interface Seq<T> {
     }
 
     default <E, R> Seq<R> zipBy(Iterable<E> iterable, BiFunction<T, E, R> function) {
-        return zip(iterable).mapTo(function);
+        return zip(iterable).map(function);
     }
 
-    default Seq2<T, T> mapPair(boolean overlapping) {
+    default <K, V> Seq2<K, V> mapIf2(BiPredicate<BiPredicate<K, V>, T> predicate) {
+        return p -> until(t -> predicate.test(p, t));
+    }
+
+    default <E> Seq2<E, T> pairBy(Function<T, E> function) {
+        return p -> until(t -> p.test(function.apply(t), t));
+    }
+
+    default <E> Seq2<T, E> pairWith(Function<T, E> function) {
+        return p -> until(t -> p.test(t, function.apply(t)));
+    }
+
+    default Seq2<T, T> toPairs(boolean overlapping) {
         return p -> until(new Predicate<T>() {
             boolean flag;
             T last = null;
@@ -728,18 +752,6 @@ public interface Seq<T> {
                 return false;
             }
         });
-    }
-
-    default <K, V> Seq2<K, V> pair(BiPredicate<BiPredicate<K, V>, T> predicate) {
-        return p -> until(t -> predicate.test(p, t));
-    }
-
-    default <E> Seq2<E, T> pairBy(Function<T, E> function) {
-        return p -> until(t -> p.test(function.apply(t), t));
-    }
-
-    default <E> Seq2<T, E> pairWith(Function<T, E> function) {
-        return p -> until(t -> p.test(t, function.apply(t)));
     }
 
     default <E> Seq2<T, E> zip(Iterable<E> iterable) {

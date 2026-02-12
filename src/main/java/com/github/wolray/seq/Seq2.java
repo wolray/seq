@@ -81,20 +81,16 @@ public interface Seq2<K, V> {
         });
     }
 
-    default <A, B> Seq2<A, B> map(Predicate3<BiPredicate<A, B>, K, V> predicate) {
-        return p -> until((k, v) -> predicate.test(p, k, v));
-    }
-
-    default <T> Seq<T> mapTo(Predicate3<Predicate<T>, K, V> predicate) {
-        return p -> until((k, v) -> predicate.test(p, k, v));
-    }
-
-    default <T> Seq<T> mapTo(BiFunction<K, V, T> function) {
+    default <T> Seq<T> map(BiFunction<K, V, T> function) {
         return p -> until((k, v) -> p.test(function.apply(k, v)));
     }
 
+    default <T> Seq<T> mapIf(Predicate3<Predicate<T>, K, V> predicate) {
+        return p -> until((k, v) -> predicate.test(p, k, v));
+    }
+
     default Seq<Pair<K, V>> paired() {
-        return mapTo(Pair::new);
+        return map(Pair::new);
     }
 
     default Seq<K> toKeys() {
@@ -120,6 +116,10 @@ public interface Seq2<K, V> {
 
     default Seq2<K, V> filterByValue(Predicate<V> predicate) {
         return p -> until((k, v) -> predicate.test(v) && p.test(k, v));
+    }
+
+    default <A, B> Seq2<A, B> mapIf2(Predicate3<BiPredicate<A, B>, K, V> predicate) {
+        return p -> until((k, v) -> predicate.test(p, k, v));
     }
 
     default <T> Seq2<T, V> mapKeys(BiFunction<K, V, T> function) {

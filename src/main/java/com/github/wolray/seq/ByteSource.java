@@ -207,8 +207,8 @@ public interface ByteSource extends IOChain.Closable<InputStream> {
         int i;
 
         public InputPuller(Iterator<String> source, String sep) {
-            Puller<byte[]> bytesPuller = Puller.map(source, String::getBytes);
-            puller = sep.isEmpty() ? bytesPuller : Puller.zip(bytesPuller, sep.getBytes());
+            Puller<byte[]> bytesPuller = ItrSeq.map(source, String::getBytes);
+            puller = sep.isEmpty() ? bytesPuller : ItrSeq.zip(bytesPuller, sep.getBytes());
         }
 
         @Override

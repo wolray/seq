@@ -2,10 +2,7 @@ package com.github.wolray.seq;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.function.BiFunction;
-import java.util.function.BiPredicate;
-import java.util.function.Function;
-import java.util.function.Supplier;
+import java.util.function.*;
 
 /**
  * @author wolray
@@ -19,6 +16,11 @@ public class SeqMap<K, V> extends LinkedHashMap<K, V> implements Seq2<K, V> {
 
     public SeqMap(int initialCapacity) {
         super(initialCapacity);
+    }
+
+    @Override
+    public void consume(BiConsumer<K, V> consumer) {
+        forEach(consumer);
     }
 
     @Override
@@ -85,6 +87,10 @@ public class SeqMap<K, V> extends LinkedHashMap<K, V> implements Seq2<K, V> {
 
     public ItrSeq<Map.Entry<K, V>> toEntries() {
         return Seq.of(entrySet());
+    }
+
+    public Seq2<K, V> asSeq() {
+        return this::until;
     }
 
     public V getOrCompute(K key, Supplier<? extends V> supplier) {

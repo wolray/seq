@@ -17,8 +17,8 @@ public interface SeqExpand<T> extends Function<T, Seq<T>> {
     default Map<T, SeqList<T>> toDAG(Seq<T> nodes) {
         Map<T, SeqList<T>> map = new HashMap<>();
         SeqExpand<T> expand = terminate(map::containsKey);
-        nodes.until(t -> expand.scan((tt, ls) -> {
-            map.putIfAbsent(tt, ls);
+        nodes.until(t -> expand.scan((x, ls) -> {
+            map.putIfAbsent(x, ls);
             return false;
         }, t));
         return map;

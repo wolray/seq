@@ -48,6 +48,9 @@ public class SeqTest {
 
         assertTo(Seq.repeat(5, 1), "1,1,1,1,1");
         assertTo(Seq.of(1, 1, 1, 2, 2).distinct(), "1,2");
+
+        assertTo(Seq.range(4), "0,1,2,3");
+        assertTo(Seq.range(1, 4), "1,2,3");
     }
 
     @Test
@@ -149,6 +152,8 @@ public class SeqTest {
     public void testReducer() {
         Seq<Integer> seq = Seq.of(1, 2, null, 3, null, 4);
         assertTo(seq.reduce(Reducer.filtering(Objects::nonNull, Reducer.mapping(Object::toString))), "1,2,3,4");
+        assertTo(seq.filterNotNull().reduce(Reducer.mapping(Object::toString)), "1,2,3,4");
+        assertTo(seq.filterNotNull().map(Object::toString), "1,2,3,4");
     }
 
     @Test
@@ -232,8 +237,7 @@ public class SeqTest {
         map.put(6, 1);
         map.put(7, 2);
         map.put(8, 7);
-        map.put(9, 8);
-        map.put(10, 9);
+        map.put(9, 7);
         SeqMap<Integer, SeqList<Integer>> tree = map.swap().groupBy();
         TreeSeq<Integer> seq = new TreeSeq<>(0, n -> {
             List<Integer> list = tree.get(n);
