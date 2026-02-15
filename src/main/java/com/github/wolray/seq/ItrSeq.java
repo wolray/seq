@@ -1,8 +1,6 @@
 package com.github.wolray.seq;
 
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.*;
 
 /**
@@ -23,7 +21,7 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
 
     @Override
     default ItrSeq<T> drop(int n) {
-        return n <= 0 ? this : () -> {
+        return () -> {
             Iterator<T> iterator = iterator();
             for (int i = 0; i < n; i++) {
                 if (iterator.hasNext()) {
@@ -82,7 +80,7 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
 
     @Override
     default <E> ItrSeq<E> flatOptional(Function<T, Optional<E>> function) {
-        return Seq.flatOptional(map(function));
+        return flatOptional(map(function));
     }
 
     @Override
@@ -116,7 +114,7 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
 
     @Override
     default ItrSeq<T> take(int n) {
-        return n <= 0 ? Seq.empty() : copyWhile(this, (p, t) -> p.index < n && p.setAndIncrease(t));
+        return copyWhile(this, (p, t) -> p.index < n && p.setAndIncrease(t));
     }
 
     @Override
@@ -127,6 +125,16 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
     @Override
     default ItrSeq<T> takeWhile(Predicate<T> predicate) {
         return copyWhile(this, (p, t) -> predicate.test(t) && p.set(t));
+    }
+
+    @Override
+    default ItrSeq<T> union(Iterable<T> iterable) {
+        return flatIterable(this, iterable);
+    }
+
+    @Override
+    default ItrSeq<T> union(T t) {
+        return flatIterable(this, Collections.singletonList(t));
     }
 
     @Override
@@ -178,9 +186,9 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
     }
 
     @Override
-    default boolean until(Predicate<T> stop) {
+    default boolean any(Predicate<T> predicate) {
         for (T t : this) {
-            if (stop.test(t)) {
+            if (predicate.test(t)) {
                 return true;
             }
         }
@@ -193,6 +201,131 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
 
     static <T, E> ItrSeq<E> copyWhile(Iterable<T> iterable, BiPredicate<Puller<E>, T> predicate) {
         return () -> copyWhile(iterable.iterator(), predicate);
+    }
+
+    static <T> ItrSeq<T> empty() {
+        return Collections::emptyIterator;
+    }
+
+    @SafeVarargs
+    static <T> ItrSeq<T> flatIterable(Iterable<T>... iterables) {
+        return () -> flatIterable(Arrays.asList(iterables));
+    }
+
+    static <T> ItrSeq<T> flatOptional(Iterable<Optional<T>> iterable) {
+        return copyIf(iterable, (p, t) -> t.filter(p::set).isPresent());
+    }
+
+    static <T> ItrSeq<T> gen(Supplier<T> supplier) {
+        return () -> new Puller<T>() {
+            @Override
+            public boolean hasNext() {
+                return set(supplier.get());
+            }
+        };
+    }
+
+    static <T> ItrSeq<T> gen(T seed, UnaryOperator<T> operator) {
+        return () -> new Puller<T>() {
+            T t = seed;
+
+            @Override
+            public boolean hasNext() {
+                if (index == 0) {
+                    return setAndIncrease(t);
+                } else {
+                    return set(t = operator.apply(t));
+                }
+            }
+        };
+    }
+
+    static <T> ItrSeq<T> gen(T seed1, T seed2, BinaryOperator<T> operator) {
+        return () -> new Puller<T>() {
+            T t1 = seed1, t2 = seed2;
+
+            @Override
+            public boolean hasNext() {
+                if (index == 0) {
+                    return setAndIncrease(t1);
+                } else if (index == 1) {
+                    return setAndIncrease(t2);
+                } else {
+                    return set(t2 = operator.apply(t1, t1 = t2));
+                }
+            }
+        };
+    }
+
+    static <T> ItrSeq<T> of(Iterable<T> iterable) {
+        if (iterable instanceof ItrSeq) {
+            return (ItrSeq<T>)iterable;
+        }
+        if (iterable instanceof Collection) {
+            Collection<T> collection = (Collection<T>)iterable;
+            return new SizedSeq<T>() {
+                @Override
+                public Iterator<T> iterator() {
+                    return iterable.iterator();
+                }
+
+                @Override
+                public int size() {
+                    return collection.size();
+                }
+            };
+        }
+        return iterable::iterator;
+    }
+
+    @SafeVarargs
+    static <T> ItrSeq<T> of(T... ts) {
+        return of(Arrays.asList(ts));
+    }
+
+    static ItrSeq<Integer> range(int n) {
+        return () -> new Puller<Integer>() {
+            @Override
+            public boolean hasNext() {
+                return index < n && setAndIncrease(index);
+            }
+        };
+    }
+
+    static ItrSeq<Integer> range(int start, int stop) {
+        return () -> new Puller<Integer>() {
+            {
+                index = start;
+            }
+
+            @Override
+            public boolean hasNext() {
+                return index < stop && setAndIncrease(index);
+            }
+        };
+    }
+
+    static <T> ItrSeq<T> repeat(int n, T t) {
+        return () -> new Puller<T>() {
+            @Override
+            public boolean hasNext() {
+                return index < n && setAndIncrease(t);
+            }
+        };
+    }
+
+    static <T> ItrSeq<T> unit(T t) {
+        return Collections.singletonList(t)::iterator;
+    }
+
+    static <T> ItrSeq<T> untilNull(Supplier<T> supplier) {
+        return () -> new Puller<T>() {
+            @Override
+            public boolean hasNext() {
+                T t = supplier.get();
+                return t != null && set(t);
+            }
+        };
     }
 
     static <T, E> Puller<E> copyIf(Iterator<T> iterator, BiPredicate<Puller<E>, T> predicate) {

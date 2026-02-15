@@ -17,7 +17,7 @@ public interface SeqExpand<T> extends Function<T, Seq<T>> {
     default Map<T, SeqList<T>> toDAG(Seq<T> nodes) {
         Map<T, SeqList<T>> map = new HashMap<>();
         SeqExpand<T> expand = terminate(map::containsKey);
-        nodes.until(t -> expand.scan((x, ls) -> {
+        nodes.any(t -> expand.scan((x, ls) -> {
             map.putIfAbsent(x, ls);
             return false;
         }, t));
@@ -55,11 +55,11 @@ public interface SeqExpand<T> extends Function<T, Seq<T>> {
 
     default boolean scan(BiPredicate<T, SeqList<T>> p, T node) {
         SeqList<T> sub = apply(node).filterNotNull().toList();
-        return p.test(node, sub) || sub.until(n -> scan(p, n));
+        return p.test(node, sub) || sub.any(n -> scan(p, n));
     }
 
     default boolean scan(Predicate<T> p, T node) {
-        return p.test(node) || apply(node).until(n -> n != null && scan(p, n));
+        return p.test(node) || apply(node).any(n -> n != null && scan(p, n));
     }
 
     default boolean scan(Predicate<T> p, T node, int maxDepth, int depth) {
@@ -67,7 +67,7 @@ public interface SeqExpand<T> extends Function<T, Seq<T>> {
             return true;
         }
         if (depth < maxDepth) {
-            return apply(node).until(n -> n != null && scan(p, n, maxDepth, depth + 1));
+            return apply(node).any(n -> n != null && scan(p, n, maxDepth, depth + 1));
         }
         return false;
     }

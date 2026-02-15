@@ -9,150 +9,21 @@ import java.util.regex.Pattern;
  * @author wolray
  */
 public interface Seq<T> {
-    boolean until(Predicate<T> stop);
+    boolean any(Predicate<T> predicate);
 
-    static <T> ItrSeq<T> empty() {
-        return Collections::emptyIterator;
-    }
-
-    @SafeVarargs
-    static <T> ItrSeq<T> flatIterable(Iterable<T>... iterables) {
-        return () -> ItrSeq.flatIterable(Arrays.asList(iterables));
-    }
-
-    static <T> ItrSeq<T> flatOptional(Iterable<Optional<T>> iterable) {
-        return ItrSeq.copyIf(iterable, (p, t) -> t.filter(p::set).isPresent());
-    }
-
-    static <T> ItrSeq<T> gen(Supplier<T> supplier) {
-        return () -> new Puller<T>() {
-            @Override
-            public boolean hasNext() {
-                return set(supplier.get());
-            }
-        };
-    }
-
-    static <T> ItrSeq<T> gen(T seed, UnaryOperator<T> operator) {
-        return () -> new Puller<T>() {
-            T t = seed;
-
-            @Override
-            public boolean hasNext() {
-                if (index == 0) {
-                    return setAndIncrease(t);
-                } else {
-                    return set(t = operator.apply(t));
-                }
-            }
-        };
-    }
-
-    static <T> ItrSeq<T> gen(T seed1, T seed2, BinaryOperator<T> operator) {
-        return () -> new Puller<T>() {
-            T t1 = seed1, t2 = seed2;
-
-            @Override
-            public boolean hasNext() {
-                if (index == 0) {
-                    return setAndIncrease(t1);
-                } else if (index == 1) {
-                    return setAndIncrease(t2);
-                } else {
-                    return set(t2 = operator.apply(t1, t1 = t2));
-                }
-            }
-        };
-    }
-
-    static <T> ItrSeq<T> of(Iterable<T> iterable) {
-        if (iterable instanceof ItrSeq) {
-            return (ItrSeq<T>)iterable;
-        }
-        if (iterable instanceof Collection) {
-            Collection<T> collection = (Collection<T>)iterable;
-            return new SizedSeq<T>() {
-                @Override
-                public Iterator<T> iterator() {
-                    return iterable.iterator();
-                }
-
-                @Override
-                public int size() {
-                    return collection.size();
-                }
-            };
-        }
-        return iterable::iterator;
-    }
-
-    @SafeVarargs
-    static <T> ItrSeq<T> of(T... ts) {
-        return of(Arrays.asList(ts));
-    }
-
-    static ItrSeq<Integer> range(int n) {
-        return () -> new Puller<Integer>() {
-            @Override
-            public boolean hasNext() {
-                return index < n && setAndIncrease(index);
-            }
-        };
-    }
-
-    static ItrSeq<Integer> range(int start, int stop) {
-        return () -> new Puller<Integer>() {
-            {
-                index = start;
-            }
-
-            @Override
-            public boolean hasNext() {
-                return index < stop && setAndIncrease(index);
-            }
-        };
-    }
-
-    static <T> ItrSeq<T> repeat(int n, T t) {
-        return () -> new Puller<T>() {
-            @Override
-            public boolean hasNext() {
-                return index < n && setAndIncrease(t);
-            }
-        };
-    }
-
-    static <T> ItrSeq<T> untilNull(Supplier<T> supplier) {
-        return () -> new Puller<T>() {
-            @Override
-            public boolean hasNext() {
-                T t = supplier.get();
-                return t != null && set(t);
-            }
-        };
-    }
-
-    @SafeVarargs
-    static <T> Seq<T> direct(T... ts) {
-        return p -> {
-            for (T t : ts) {
-                if (p.test(t)) {
-                    return true;
-                }
-            }
-            return false;
-        };
+    static <T> Seq<T> empty() {
+        return p -> false;
     }
 
     static <T> Seq<T> flat(Seq<Optional<T>> seq) {
-        return p -> seq.until(o -> o.filter(p).isPresent());
+        return p -> seq.any(o -> o.filter(p).isPresent());
     }
 
     @SafeVarargs
     static <T> Seq<T> flat(Seq<T>... seq) {
         return p -> {
             for (Seq<T> s : seq) {
-                if (s.until(p)) {
+                if (s.any(p)) {
                     return true;
                 }
             }
@@ -170,6 +41,22 @@ public interface Seq<T> {
             }
             return false;
         };
+    }
+
+    static <T> Seq<T> of(Iterable<T> iterable) {
+        return p -> {
+            for (T t : iterable) {
+                if (p.test(t)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+    }
+
+    @SafeVarargs
+    static <T> Seq<T> of(T... ts) {
+        return of(Arrays.asList(ts));
     }
 
     static Seq<Object> ofJson(Object node) {
@@ -204,7 +91,7 @@ public interface Seq<T> {
     }
 
     default void consume(Consumer<T> consumer) {
-        until(t -> {
+        any(t -> {
             consumer.accept(t);
             return false;
         });
@@ -247,7 +134,7 @@ public interface Seq<T> {
 
     default <E> E reduce(Reducer<T, E> reducer) {
         Reducer.Worker<T, E> worker = reducer.get();
-        consume(worker::accept);
+        any(worker);
         return worker.result();
     }
 
@@ -281,26 +168,18 @@ public interface Seq<T> {
         return find(t -> !set.add(t));
     }
 
-    default Optional<T> findFirst() {
-        return find(t -> true);
-    }
-
     default Optional<T> findNot(Predicate<T> predicate) {
         return find(predicate.negate());
     }
 
-    default Optional<T> last(Predicate<T> predicate) {
-        return filter(predicate).lastMaybe();
+    default Optional<T> firstMaybe() {
+        return find(t -> true);
     }
 
     default Optional<T> lastMaybe() {
         Mutable<T> m = new Mutable<>(null);
         consume(m::set);
         return m.toOptional();
-    }
-
-    default Optional<T> lastNot(Predicate<T> predicate) {
-        return last(predicate.negate());
     }
 
     default <V extends Comparable<V>> Pair<T, V> maxBy(Function<T, V> function) {
@@ -311,134 +190,45 @@ public interface Seq<T> {
         return reduce(Reducer.minBy(function));
     }
 
-    default Seq<T> append(T t) {
-        return p -> {
-            until(p);
-            return p.test(t);
-        };
-    }
-
-    @SuppressWarnings("unchecked")
-    default Seq<T> append(T... t) {
-        return p -> {
-            if (until(p)) {
-                return true;
-            }
-            for (T x : t) {
-                if (p.test(x)) {
-                    return true;
-                }
-            }
-            return false;
-        };
-    }
-
-    default Seq<T> appendAll(Iterable<T> iterable) {
-        return p -> {
-            if (until(p)) {
-                return true;
-            }
-            for (T t : iterable) {
-                if (p.test(t)) {
-                    return true;
-                }
-            }
-            return false;
-        };
-    }
-
-    default Seq<T> appendWith(Seq<T> seq) {
-        return p -> until(p) || seq.until(p);
-    }
-
     default Seq<SeqList<T>> chunked(int size) {
         return chunked(size, Reducer.toList(size));
     }
 
     default <V> Seq<V> chunked(int size, Reducer<T, V> reducer) {
-        if (size <= 0) {
-            throw new IllegalArgumentException("non-positive size");
-        }
-        return p -> {
-            Mutable<Reducer.Worker<T, V>> m = new Mutable<>(null);
-            m.it = reducer.get();
-            boolean flag = until(new Predicate<T>() {
-                int idx = 0;
-
-                @Override
-                public boolean test(T t) {
-                    if (idx == size) {
-                        if (p.test(m.it.result())) {
-                            m.it = null;
-                            return true;
-                        }
-                        m.it = reducer.get();
-                        idx = 0;
-                    }
-                    m.it.accept(t);
-                    idx++;
-                    return false;
-                }
-            });
-            if (flag) {
-                return true;
-            }
-            if (m.it != null) {
-                return p.test(m.it.result());
-            }
-            return false;
-        };
-    }
-
-    default Seq<T> circle() {
-        return p -> {
-            while (true) {
-                if (until(p)) {
-                    return true;
-                }
-            }
-        };
+        return downstream(Downstream.chunked(size, reducer));
     }
 
     default Seq<T> distinct() {
-        return p -> {
-            HashSet<T> set = new HashSet<>();
-            return until(t -> set.add(t) && p.test(t));
-        };
+        return downstream(Downstream.distinct());
     }
 
     default <E> Seq<T> distinctBy(Function<T, E> function) {
+        return downstream(Downstream.distinctBy(function));
+    }
+
+    default <E> Seq<E> downstream(Downstream<T, E> downstream) {
+        return p -> any(downstream.apply(p));
+    }
+
+    default <E> Seq<E> downstream(Downstream.Staged<T, E> downstream) {
         return p -> {
-            HashSet<E> set = new HashSet<>();
-            return until(t -> set.add(function.apply(t)) && p.test(t));
+            Downstream.StagedPredicate<T> origin = downstream.apply(p);
+            return any(origin) || origin.after();
         };
     }
 
     default Seq<T> drop(int n) {
-        return n <= 0 ? this : p -> untilIndexed((i, t) -> i >= n && p.test(t));
+        return n <= 0 ? this : downstream(Downstream.drop(n));
     }
 
     default Seq<T> dropWhile(Predicate<T> predicate) {
-        return p -> until(new Predicate<T>() {
-            boolean flag = true;
-
-            @Override
-            public boolean test(T t) {
-                if (flag) {
-                    if (predicate.test(t)) {
-                        return false;
-                    }
-                    flag = false;
-                }
-                return p.test(t);
-            }
-        });
+        return downstream(Downstream.dropWhile(predicate));
     }
 
     default Seq<T> duplicateAll(int times) {
         return p -> {
             for (int i = 0; i < times; i++) {
-                if (until(p)) {
+                if (any(p)) {
                     return true;
                 }
             }
@@ -447,33 +237,15 @@ public interface Seq<T> {
     }
 
     default Seq<T> duplicateEach(int times) {
-        return p -> until(t -> {
-            for (int i = 0; i < times; i++) {
-                if (p.test(t)) {
-                    return true;
-                }
-            }
-            return false;
-        });
+        return downstream(Downstream.duplicateEach(times));
     }
 
     default Seq<T> duplicateIf(int times, Predicate<T> predicate) {
-        return p -> until(t -> {
-            if (predicate.test(t)) {
-                for (int i = 0; i < times; i++) {
-                    if (p.test(t)) {
-                        return true;
-                    }
-                }
-            } else {
-                return p.test(t);
-            }
-            return false;
-        });
+        return downstream(Downstream.duplicateIf(times, predicate));
     }
 
     default Seq<T> filter(Predicate<T> predicate) {
-        return p -> until(t -> predicate.test(t) && p.test(t));
+        return downstream(Downstream.filter(predicate));
     }
 
     default Seq<T> filterIn(Collection<T> collection) {
@@ -485,11 +257,11 @@ public interface Seq<T> {
     }
 
     default Seq<T> filterIndexed(IntObjPredicate<T> predicate) {
-        return p -> untilIndexed((i, t) -> predicate.test(i, t) && p.test(t));
+        return downstream(Downstream.filterIndexed(predicate));
     }
 
     default <E extends T> Seq<E> filterInstance(Class<E> cls) {
-        return p -> until(t -> cls.isInstance(t) && p.test(cls.cast(t)));
+        return downstream(Downstream.filterInstance(cls));
     }
 
     default Seq<T> filterNot(Predicate<T> predicate) {
@@ -505,67 +277,47 @@ public interface Seq<T> {
     }
 
     default Seq<T> filterNotNull() {
-        return filter(Objects::nonNull);
+        return downstream(Downstream.filterNotNull());
     }
 
     default <E> Seq<E> flatIterable(Function<T, Iterable<E>> function) {
-        return p -> until(t -> {
-            for (E e : function.apply(t)) {
-                if (p.test(e)) {
-                    return true;
-                }
-            }
-            return false;
-        });
+        return downstream(Downstream.flatIterable(function));
     }
 
     default <E> Seq<E> flatMap(Function<T, Seq<E>> function) {
-        return p -> until(t -> function.apply(t).until(p));
+        return downstream(Downstream.flatMap(function));
     }
 
     default <E> Seq<E> flatOptional(Function<T, Optional<E>> function) {
-        return p -> until(t -> function.apply(t).filter(p).isPresent());
+        return downstream(Downstream.flatOptional(function));
     }
 
     default <E> Seq<E> map(Function<T, E> function) {
-        return p -> until(t -> p.test(function.apply(t)));
+        return downstream(Downstream.map(function));
     }
 
     default <E> Seq<E> mapIf(BiPredicate<Predicate<E>, T> predicate) {
-        return p -> until(t -> predicate.test(p, t));
+        return downstream(Downstream.mapIf(predicate));
     }
 
     default <E> Seq<E> mapIndexed(IntObjFunction<T, E> function) {
-        return p -> untilIndexed((i, t) -> p.test(function.apply(i, t)));
+        return downstream(Downstream.mapIndexed(function));
     }
 
     default Seq<T> onEach(Consumer<T> consumer) {
-        return p -> until(t -> {
-            consumer.accept(t);
-            return p.test(t);
-        });
+        return downstream(Downstream.onEach(consumer));
     }
 
     default Seq<T> onEachIndexed(IntObjConsumer<T> consumer) {
-        return p -> untilIndexed((i, t) -> {
-            consumer.accept(i, t);
-            return p.test(t);
-        });
+        return downstream(Downstream.onEachIndexed(consumer));
     }
 
     default Seq<T> replace(int n, UnaryOperator<T> operator) {
-        return mapIndexed((i, t) -> i < n ? operator.apply(t) : t);
+        return downstream(Downstream.replace(n, operator));
     }
 
     default <E> Seq<E> runningFold(E init, BiFunction<E, T, E> function) {
-        return p -> until(new Predicate<T>() {
-            E cur = init;
-
-            @Override
-            public boolean test(T t) {
-                return p.test(cur = function.apply(cur, t));
-            }
-        });
+        return downstream(Downstream.runningFold(init, function));
     }
 
     default <E extends Comparable<E>> Seq<T> sortCached(Function<T, E> function) {
@@ -577,40 +329,15 @@ public interface Seq<T> {
     }
 
     default Seq<T> take(int n) {
-        return p -> until(new Predicate<T>() {
-            int i = 1;
-
-            @Override
-            public boolean test(T t) {
-                return i++ > n || p.test(t);
-            }
-        });
+        return n <= 0 ? empty() : downstream(Downstream.take(n));
     }
 
     default Seq<T> takeWhile(BiPredicate<T, T> testPrevCurr) {
-        return p -> until(new Predicate<T>() {
-            T prev = null;
-            boolean first = true;
-
-            @Override
-            public boolean test(T t) {
-                if (first) {
-                    first = false;
-                    prev = t;
-                    return p.test(t);
-                } else {
-                    if (testPrevCurr.test(prev, t)) {
-                        prev = t;
-                        return p.test(t);
-                    }
-                    return true;
-                }
-            }
-        });
+        return downstream(Downstream.takeWhile(testPrevCurr));
     }
 
     default Seq<T> takeWhile(Predicate<T> predicate) {
-        return p -> until(t -> !predicate.test(t) || p.test(t));
+        return downstream(Downstream.takeWhile(predicate));
     }
 
     default Seq<T> takeWhileEquals() {
@@ -618,83 +345,32 @@ public interface Seq<T> {
     }
 
     default Seq<T> timeLimit(long millis) {
-        return millis <= 0 ? this : p -> {
-            long end = System.currentTimeMillis() + millis;
-            return until(t -> System.currentTimeMillis() > end || p.test(t));
-        };
+        return millis <= 0 ? this : downstream(Downstream.timeLimit(millis));
     }
 
-    default Seq<SeqList<T>> windowed(int size, int step, boolean allowPartial) {
-        return windowed(size, step, allowPartial, Reducer.toList());
+    default Seq<T> union(Iterable<T> iterable) {
+        return downstream(Downstream.union(iterable));
+    }
+
+    default Seq<T> union(T t) {
+        return downstream(Downstream.union(t));
+    }
+
+    @SuppressWarnings("unchecked")
+    default Seq<T> union(T... t) {
+        return union(Arrays.asList(t));
+    }
+
+    default Seq<T> unionAll(Seq<T> seq) {
+        return p -> any(p) || seq.any(p);
     }
 
     default <V> Seq<V> windowed(int size, int step, boolean allowPartial, Reducer<T, V> reducer) {
-        if (size <= 0 || step <= 0) {
-            throw new IllegalArgumentException("non-positive size or step");
-        }
-        return p -> {
-            Queue<IntPair<Reducer.Worker<T, V>>> queue = new LinkedList<>();
-            boolean flag = until(new Predicate<T>() {
-                int i = 0;
-
-                @Override
-                public boolean test(T t) {
-                    if (i == 0) {
-                        i = step;
-                        queue.offer(new IntPair<>(0, reducer.get()));
-                    }
-                    queue.forEach(sub -> {
-                        sub.it.accept(t);
-                        sub.intVal++;
-                    });
-                    IntPair<Reducer.Worker<T, V>> first = queue.peek();
-                    if (first != null && first.intVal == size) {
-                        queue.poll();
-                        if (p.test(first.it.result())) {
-                            return true;
-                        }
-                    }
-                    i -= 1;
-                    return false;
-                }
-            });
-            if (flag) {
-                return true;
-            }
-            if (allowPartial) {
-                queue.forEach(pair -> p.test(pair.it.result()));
-            }
-            queue.clear();
-            return false;
-        };
-    }
-
-    default Seq<SeqList<T>> windowedByTime(long timeMillis) {
-        return windowedByTime(timeMillis, Reducer.toList());
+        return downstream(Downstream.windowed(size, step, allowPartial, reducer));
     }
 
     default <V> Seq<V> windowedByTime(long timeMillis, Reducer<T, V> reducer) {
-        if (timeMillis <= 0) {
-            throw new IllegalArgumentException("non-positive time");
-        }
-        return p -> until(new Predicate<T>() {
-            long last = System.currentTimeMillis();
-            Reducer.Worker<T, V> worker = reducer.get();
-
-            @Override
-            public boolean test(T t) {
-                long now = System.currentTimeMillis();
-                if (now - last > timeMillis) {
-                    last = now;
-                    if (p.test(worker.result())) {
-                        return true;
-                    }
-                    worker = reducer.get();
-                }
-                worker.accept(t);
-                return false;
-            }
-        });
+        return downstream(Downstream.windowedByTime(timeMillis, reducer));
     }
 
     default Seq<IntPair<T>> withInt(ToIntFunction<T> function) {
@@ -714,11 +390,11 @@ public interface Seq<T> {
     }
 
     default Seq<IntPair<T>> withIndex() {
-        return p -> untilIndexed((i, t) -> p.test(new IntPair<>(i, t)));
+        return downstream(Downstream.withIndex());
     }
 
     default Seq<T> zip(T t) {
-        return p -> until(o -> p.test(o) || p.test(t));
+        return downstream(Downstream.zip(t));
     }
 
     default <E, R> Seq<R> zipBy(Iterable<E> iterable, BiFunction<T, E, R> function) {
@@ -726,19 +402,19 @@ public interface Seq<T> {
     }
 
     default <K, V> Seq2<K, V> mapIf2(BiPredicate<BiPredicate<K, V>, T> predicate) {
-        return p -> until(t -> predicate.test(p, t));
+        return p -> any(t -> predicate.test(p, t));
     }
 
     default <E> Seq2<E, T> pairBy(Function<T, E> function) {
-        return p -> until(t -> p.test(function.apply(t), t));
+        return p -> any(t -> p.test(function.apply(t), t));
     }
 
     default <E> Seq2<T, E> pairWith(Function<T, E> function) {
-        return p -> until(t -> p.test(t, function.apply(t)));
+        return p -> any(t -> p.test(t, function.apply(t)));
     }
 
     default Seq2<T, T> toPairs(boolean overlapping) {
-        return p -> until(new Predicate<T>() {
+        return p -> any(new Predicate<T>() {
             boolean flag;
             T last = null;
 
@@ -757,7 +433,7 @@ public interface Seq<T> {
     default <E> Seq2<T, E> zip(Iterable<E> iterable) {
         return p -> {
             Iterator<E> iterator = iterable.iterator();
-            return until(t -> !iterator.hasNext() || p.test(t, iterator.next()));
+            return any(t -> !iterator.hasNext() || p.test(t, iterator.next()));
         };
     }
 
@@ -795,6 +471,10 @@ public interface Seq<T> {
         return reduce(new SeqList<>(sizeOrDefault()), SeqList::add);
     }
 
+    default <E> SeqList<E> toList(Function<T, E> function) {
+        return reduce(new SeqList<>(sizeOrDefault()), (ls, t) -> ls.add(function.apply(t)));
+    }
+
     default <K> SeqMap<K, SeqList<T>> groupBy(Function<T, K> toKey) {
         return reduce(Reducer.groupBy(toKey, Reducer.toList()));
     }
@@ -825,6 +505,10 @@ public interface Seq<T> {
 
     default SeqSet<T> toSet() {
         return reduce(Reducer.toSet(sizeOrDefault()));
+    }
+
+    default <E> SeqSet<E> toSet(Function<T, E> function) {
+        return reduce(new SeqSet<>(sizeOrDefault()), (ls, t) -> ls.add(function.apply(t)));
     }
 
     default SizedSeq<T> cache() {
@@ -866,24 +550,16 @@ public interface Seq<T> {
         return a;
     }
 
-    default boolean matchAll(Predicate<T> predicate) {
-        return !matchAny(predicate.negate());
+    default boolean all(Predicate<T> predicate) {
+        return !any(predicate.negate());
     }
 
-    default boolean matchAny(Predicate<T> predicate) {
-        return find(predicate).isPresent();
-    }
-
-    default boolean matchAnyNot(Predicate<T> predicate) {
-        return matchAny(predicate.negate());
-    }
-
-    default boolean matchNone(Predicate<T> predicate) {
-        return !matchAny(predicate);
+    default boolean none(Predicate<T> predicate) {
+        return !any(predicate);
     }
 
     default boolean untilIndexed(IntObjPredicate<T> predicate) {
-        return until(new Predicate<T>() {
+        return any(new Predicate<T>() {
             int index = 0;
 
             @Override

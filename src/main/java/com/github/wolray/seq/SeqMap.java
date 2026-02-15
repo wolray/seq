@@ -25,12 +25,12 @@ public class SeqMap<K, V> extends LinkedHashMap<K, V> implements Seq2<K, V> {
 
     @Override
     public ItrSeq<K> toKeys() {
-        return Seq.of(keySet());
+        return ItrSeq.of(keySet());
     }
 
     @Override
     public ItrSeq<V> toValues() {
-        return Seq.of(values());
+        return ItrSeq.of(values());
     }
 
     @Override
@@ -72,7 +72,7 @@ public class SeqMap<K, V> extends LinkedHashMap<K, V> implements Seq2<K, V> {
     }
 
     @Override
-    public boolean until(BiPredicate<K, V> predicate) {
+    public boolean any(BiPredicate<K, V> predicate) {
         for (Map.Entry<K, V> entry : entrySet()) {
             if (predicate.test(entry.getKey(), entry.getValue())) {
                 return true;
@@ -86,11 +86,11 @@ public class SeqMap<K, V> extends LinkedHashMap<K, V> implements Seq2<K, V> {
     }
 
     public ItrSeq<Map.Entry<K, V>> toEntries() {
-        return Seq.of(entrySet());
+        return ItrSeq.of(entrySet());
     }
 
     public Seq2<K, V> asSeq() {
-        return this::until;
+        return this::any;
     }
 
     public V getOrCompute(K key, Supplier<? extends V> supplier) {

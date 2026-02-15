@@ -18,7 +18,7 @@ import java.util.Map;
  * @author wolray
  */
 public class SeqClassesTest {
-    public static final SeqExpand<Class<?>> CLASS_EXPAND = cls -> Seq.of(cls.getInterfaces()).append(cls.getSuperclass());
+    public static final SeqExpand<Class<?>> CLASS_EXPAND = cls -> Seq.of(cls.getInterfaces()).union(cls.getSuperclass());
 
     public static Graph graph(Map<Class<?>, SeqList<Class<?>>> map) {
         Map<Class<?>, Pair<Class<?>, Node>> nodeMap = new SeqMap<>(map).mapValues((cls, parents) -> {
@@ -52,21 +52,9 @@ public class SeqClassesTest {
         Map<Class<?>, SeqList<Class<?>>> map = CLASS_EXPAND
             .filterNot(ignore.toSet()::contains)
             .terminate(cls -> cls.getName().startsWith("java"))
-            .toDAG(Seq.of(SeqList.class, LinkedSeq.class, ConcurrentSeq.class, SeqSet.class, BatchedSeq.class));
+            .toDAG(Seq.of(SeqList.class, LinkedSeq.class, ConcurrentSeq.class, SeqSet.class, BatchedSeq.class, SeqMap.class));
         Graph graph = graph(map);
         IOChain.apply(String.format("src/test/resources/%s.svg", "seq-classes"),
-            s -> Graphviz.fromGraph(graph).render(Format.SVG).toFile(new File(s)));
-    }
-
-    @Test
-    public void testSeqMap() {
-        Seq<Class<?>> ignore = Seq.of(Seq.class);
-        Map<Class<?>, SeqList<Class<?>>> map = CLASS_EXPAND
-            .filterNot(ignore.toSet()::contains)
-            .terminate(cls -> cls.getName().startsWith("java"))
-            .toDAG(Seq.of(SeqMap.class));
-        Graph graph = graph(map);
-        IOChain.apply(String.format("src/test/resources/%s.svg", "seq-map"),
             s -> Graphviz.fromGraph(graph).render(Format.SVG).toFile(new File(s)));
     }
 }

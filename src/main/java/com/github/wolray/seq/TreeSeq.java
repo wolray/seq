@@ -18,9 +18,9 @@ public class TreeSeq<N> implements Seq<N> {
     }
 
     @Override
-    public boolean until(Predicate<N> stop) {
+    public boolean any(Predicate<N> predicate) {
         SeqExpand<N> expand = SeqExpand.of(n -> Seq.of(() -> toSub.apply(n)));
-        return expand.scan(stop, root);
+        return expand.scan(predicate, root);
     }
 
     public String print(Function<N, String> toName) {

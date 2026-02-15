@@ -9,6 +9,10 @@ import java.util.regex.Pattern;
 public interface Splitter {
     Seq<String> split(String s);
 
+    static Seq2<String, String> parsePairs(String s, char entrySep, char kvSep) {
+        return parsePairs(s.toCharArray(), entrySep, kvSep);
+    }
+
     static Seq2<String, String> parsePairs(char[] chars, char entrySep, char kvSep) {
         return p -> {
             int len = chars.length, last = 0;

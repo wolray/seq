@@ -8,7 +8,7 @@ import java.util.function.*;
  * @author wolray
  */
 public interface Seq2<K, V> {
-    boolean until(BiPredicate<K, V> predicate);
+    boolean any(BiPredicate<K, V> predicate);
 
     static <K, V> Seq2<K, V> empty() {
         return p -> false;
@@ -30,14 +30,14 @@ public interface Seq2<K, V> {
     }
 
     default void consume(BiConsumer<K, V> consumer) {
-        until((k, v) -> {
+        any((k, v) -> {
             consumer.accept(k, v);
             return false;
         });
     }
 
     default <E> E reduce(E des, Consumer3<E, K, V> accumulator) {
-        until((k, v) -> {
+        any((k, v) -> {
             accumulator.accept(des, k, v);
             return false;
         });
@@ -82,11 +82,15 @@ public interface Seq2<K, V> {
     }
 
     default <T> Seq<T> map(BiFunction<K, V, T> function) {
-        return p -> until((k, v) -> p.test(function.apply(k, v)));
+        return p -> any((k, v) -> p.test(function.apply(k, v)));
     }
 
     default <T> Seq<T> mapIf(Predicate3<Predicate<T>, K, V> predicate) {
-        return p -> until((k, v) -> predicate.test(p, k, v));
+        return p -> any((k, v) -> predicate.test(p, k, v));
+    }
+
+    default Seq<String> mapJoined(String sep) {
+        return map((k, v) -> k + sep + v);
     }
 
     default Seq<Pair<K, V>> paired() {
@@ -94,59 +98,59 @@ public interface Seq2<K, V> {
     }
 
     default Seq<K> toKeys() {
-        return p -> until((k, v) -> p.test(k));
+        return p -> any((k, v) -> p.test(k));
     }
 
     default Seq<V> toValues() {
-        return p -> until((k, v) -> p.test(v));
+        return p -> any((k, v) -> p.test(v));
     }
 
     default Seq2<K, V> cache() {
         Seq<Pair<K, V>> seq = paired().cache();
-        return p -> seq.until(pair -> p.test(pair.first, pair.second));
+        return p -> seq.any(pair -> p.test(pair.first, pair.second));
     }
 
     default Seq2<K, V> filter(BiPredicate<K, V> predicate) {
-        return p -> until((k, v) -> predicate.test(k, v) && p.test(k, v));
+        return p -> any((k, v) -> predicate.test(k, v) && p.test(k, v));
     }
 
     default Seq2<K, V> filterByKey(Predicate<K> predicate) {
-        return p -> until((k, v) -> predicate.test(k) && p.test(k, v));
+        return p -> any((k, v) -> predicate.test(k) && p.test(k, v));
     }
 
     default Seq2<K, V> filterByValue(Predicate<V> predicate) {
-        return p -> until((k, v) -> predicate.test(v) && p.test(k, v));
+        return p -> any((k, v) -> predicate.test(v) && p.test(k, v));
     }
 
     default <A, B> Seq2<A, B> mapIf2(Predicate3<BiPredicate<A, B>, K, V> predicate) {
-        return p -> until((k, v) -> predicate.test(p, k, v));
+        return p -> any((k, v) -> predicate.test(p, k, v));
     }
 
     default <T> Seq2<T, V> mapKeys(BiFunction<K, V, T> function) {
-        return p -> until((k, v) -> p.test(function.apply(k, v), v));
+        return p -> any((k, v) -> p.test(function.apply(k, v), v));
     }
 
     default <T> Seq2<T, V> mapKeys(Function<K, T> function) {
-        return p -> until((k, v) -> p.test(function.apply(k), v));
+        return p -> any((k, v) -> p.test(function.apply(k), v));
     }
 
     default <T> Seq2<K, T> mapValues(BiFunction<K, V, T> function) {
-        return p -> until((k, v) -> p.test(k, function.apply(k, v)));
+        return p -> any((k, v) -> p.test(k, function.apply(k, v)));
     }
 
     default <T> Seq2<K, T> mapValues(Function<V, T> function) {
-        return p -> until((k, v) -> p.test(k, function.apply(v)));
+        return p -> any((k, v) -> p.test(k, function.apply(v)));
     }
 
     default Seq2<K, V> onEach(BiConsumer<K, V> consumer) {
-        return p -> until((k, v) -> {
+        return p -> any((k, v) -> {
             consumer.accept(k, v);
             return p.test(k, v);
         });
     }
 
     default Seq2<V, K> swap() {
-        return p -> until((k, v) -> p.test(v, k));
+        return p -> any((k, v) -> p.test(v, k));
     }
 
     default SeqMap<K, SeqList<V>> groupBy() {
@@ -155,7 +159,7 @@ public interface Seq2<K, V> {
 
     default <T> SeqMap<K, T> groupBy(Reducer<V, T> reducer) {
         SeqMap<K, Reducer.Worker<V, T>> map = new SeqMap<>();
-        consume((k, v) -> map.getOrCompute(k, reducer::get).accept(v));
+        any((k, v) -> map.getOrCompute(k, reducer).test(v));
         return map.mapValues(Reducer.Worker::result);
     }
 

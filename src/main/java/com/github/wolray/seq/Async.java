@@ -91,9 +91,9 @@ public interface Async {
     default <T> AsyncSeq<T> toAsync(Seq<T> seq) {
         return new AsyncSeq<T>(this, sourceOf(seq)) {
             @Override
-            public boolean until(Predicate<T> stop) {
+            public boolean any(Predicate<T> stop) {
                 checkState();
-                task = submit(() -> source.until(t -> cancelled || stop.test(t)));
+                task = submit(() -> source.any(t -> cancelled || stop.test(t)));
                 return false;
             }
         };

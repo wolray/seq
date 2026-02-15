@@ -5,7 +5,6 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -16,13 +15,14 @@ import java.util.regex.Pattern;
 public class SeqTest {
     @Test
     public void testResult() {
-        Seq<Integer> seq1 = Seq.direct(0, 2, 4, 1, 6, 3, 8, 10, 11, 12);
-        ItrSeq<Integer> seq2 = Seq.of(0, 2, 4, 1, 6, 3, 8, 10, 11, 12);
+        Seq<Integer> seq1 = Seq.of(0, 2, 4, 1, 6, 3, 8, 10, 11, 12);
+        ItrSeq<Integer> seq2 = ItrSeq.of(0, 2, 4, 1, 6, 3, 8, 10, 11, 12);
         Seq<Integer> filtered1 = seq1.take(5);
         ItrSeq<Integer> filtered2 = seq2.take(5);
 
         assertTo(filtered1, "0,2,4,1,6");
         assertTo(filtered2, "0,2,4,1,6");
+        assertTo(filtered1.replace(2, i -> i + 100), "100,102,4,1,6");
 
         assertTo(filtered1.reverse(), "6,1,4,2,0");
         assertTo(filtered2.reverse(), "6,1,4,2,0");
@@ -43,20 +43,20 @@ public class SeqTest {
         assertTo(seq1.take(5).drop(2), "4,1,6");
         assertTo(seq2.take(5).drop(2), "4,1,6");
 
-        Seq<Integer> token1 = Seq.gen(() -> 1).take(5);
+        Seq<Integer> token1 = ItrSeq.gen(() -> 1).take(5);
         assertTo(token1, "1,1,1,1,1");
 
-        assertTo(Seq.repeat(5, 1), "1,1,1,1,1");
-        assertTo(Seq.of(1, 1, 1, 2, 2).distinct(), "1,2");
+        assertTo(ItrSeq.repeat(5, 1), "1,1,1,1,1");
+        assertTo(ItrSeq.of(1, 1, 1, 2, 2).distinct(), "1,2");
 
-        assertTo(Seq.range(4), "0,1,2,3");
-        assertTo(Seq.range(1, 4), "1,2,3");
+        assertTo(ItrSeq.range(4), "0,1,2,3");
+        assertTo(ItrSeq.range(1, 4), "1,2,3");
     }
 
     @Test
     public void testRunningFold() {
-        ItrSeq<Integer> seq1 = Seq.of(2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
-        Seq<Integer> seq2 = Seq.direct(2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
+        ItrSeq<Integer> seq1 = ItrSeq.of(2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
+        Seq<Integer> seq2 = Seq.of(2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
         assertTo(seq1.runningFold(1, Integer::sum), "3,7,8,14,17,22,29,39,50,62");
         assertTo(seq2.runningFold(1, Integer::sum), "3,7,8,14,17,22,29,39,50,62");
         assertTo(seq1.runningFold(1, Integer::sum).take(4), "3,7,8,14");
@@ -69,39 +69,50 @@ public class SeqTest {
         Pair<SeqList<Integer>, SeqList<Integer>> pair1 = seq.reduce(Reducer.partition(i -> (i & 1) > 0));
         assertTo(pair1.first, "1,3,5,7,11");
         assertTo(pair1.second, "0,2,4,6,10,12");
+        Pair<Integer, Integer> pair2 = seq.reduce(Reducer.partition(i -> (i & 1) > 0, Reducer.first()));
+        assert pair2.first.equals(1);
+        assert pair2.second.equals(0);
+        Pair<Integer, Integer> pair3 = seq.reduce(Reducer.partition(i -> (i & 1) > 0, Reducer.first(i -> i > 4)));
+        assert pair3.first.equals(5);
+        assert pair3.second.equals(6);
+        Pair<SeqList<Integer>, SeqList<Integer>> pair4 = seq.reduce(Reducer.partition(i -> (i & 1) > 0, Reducer.of(Downstream.take(4))));
+        assertTo(pair4.first, "1,3,5,7");
+        assertTo(pair4.second, "0,2,4,6");
     }
 
     @Test
     public void testChunked() {
-        List<Integer> list = Arrays.asList(0, 2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
-        ItrSeq<Integer> seq = Seq.of(list);
+        Seq<Integer> seq = Seq.of(0, 2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
         Function<SeqList<Integer>, String> function = s -> s.join(",");
         assertTo(seq.chunked(2).map(function), "|", "0,2|4,1|6,3|5,7|10,11|12");
         assertTo(seq.chunked(3).map(function), "|", "0,2,4|1,6,3|5,7,10|11,12");
         assertTo(seq.chunked(4).map(function), "|", "0,2,4,1|6,3,5,7|10,11,12");
         assertTo(seq.chunked(5).map(function), "|", "0,2,4,1,6|3,5,7,10,11|12");
-        assertTo(seq.windowed(5, 3, true).map(function), "|", "0,2,4,1,6|1,6,3,5,7|5,7,10,11,12|11,12");
-        assertTo(seq.windowed(5, 3, false).map(function), "|", "0,2,4,1,6|1,6,3,5,7|5,7,10,11,12");
+        assertTo(seq.windowed(5, 3, true, Reducer.toList()).map(function), "|", "0,2,4,1,6|1,6,3,5,7|5,7,10,11,12|11,12");
+        assertTo(seq.windowed(5, 3, false, Reducer.toList()).map(function), "|", "0,2,4,1,6|1,6,3,5,7|5,7,10,11,12");
         assertTo(Seq.of(1, 2, 3, 4).chunked(2).map(function), "|", "1,2|3,4");
-        assertTo(Seq.empty().chunked(2), "[]");
+        Seq<Integer> empty = Seq.empty();
+        Seq<SeqList<Integer>> chunked = empty.chunked(2);
+        assertTo(chunked, "[]");
+        assertTo(seq.chunked(4, Reducer.of(Downstream.take(2))).map(function), "|", "0,2|6,3|10,11");
     }
 
     @Test
     public void testGroupBy() {
-        Seq<Integer> seq1 = Seq.direct(0, 2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
-        Seq<Integer> seq2 = Seq.of(0, 2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
-        assert seq1.groupBy(i -> i / 4).toString().equals("{0=[0, 2, 1, 3], 1=[4, 6, 5, 7], 2=[10, 11], 3=[12]}");
-        assert seq2.groupBy(i -> i / 4).toString().equals("{0=[0, 2, 1, 3], 1=[4, 6, 5, 7], 2=[10, 11], 3=[12]}");
-        assert seq1.groupBy(i -> i / 4, Reducer.sumInt()).toString().equals("{0=6, 1=22, 2=21, 3=12}");
-        assert seq2.groupBy(i -> i / 4, Reducer.sumInt()).toString().equals("{0=6, 1=22, 2=21, 3=12}");
+        Seq<Integer> seq = Seq.of(0, 2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
+        assert seq.groupBy(i -> i / 4).toString().equals("{0=[0, 2, 1, 3], 1=[4, 6, 5, 7], 2=[10, 11], 3=[12]}");
+        assert seq.groupBy(i -> i / 4, Reducer.first(i -> i % 4 == 0)).toString().equals("{0=0, 1=4, 2=null, 3=12}");
+        assert seq.groupBy(i -> i / 4, Reducer.sumInt()).toString().equals("{0=6, 1=22, 2=21, 3=12}");
+        assert seq.groupBy(i -> i / 4, Reducer.first()).toString().equals("{0=0, 1=4, 2=10, 3=12}");
+        assert seq.groupBy(i -> i / 4, Reducer.of(Downstream.chunked(2))).toString().equals("{0=[[0, 2], [1, 3]], 1=[[4, 6], [5, 7]], 2=[[10, 11]], 3=[[12]]}");
     }
 
     @Test
     public void testYield() {
-        Seq<Integer> fib1 = Seq.gen(1, 1, Integer::sum).take(10);
+        ItrSeq<Integer> fib1 = ItrSeq.gen(1, 1, Integer::sum).take(10);
         assertTo(fib1, "1,1,2,3,5,8,13,21,34,55");
 
-        Seq<Integer> quad1 = Seq.gen(1, i -> i * 2).take(10);
+        ItrSeq<Integer> quad1 = ItrSeq.gen(1, i -> i * 2).take(10);
         assertTo(quad1, "1,2,4,8,16,32,64,128,256,512");
 
         List<Integer> list1 = Arrays.asList(10, 20, 30);
@@ -134,16 +145,16 @@ public class SeqTest {
 
     @Test
     public void testWhileEquals() {
-        Seq<Integer> seq1 = Seq.direct(1, 1, 1, 2, 3, 4, 6);
-        ItrSeq<Integer> seq2 = Seq.of(1, 1, 1, 2, 3, 4, 6);
+        Seq<Integer> seq1 = Seq.of(1, 1, 1, 2, 3, 4, 6);
+        ItrSeq<Integer> seq2 = ItrSeq.of(1, 1, 1, 2, 3, 4, 6);
         assertTo(seq1.takeWhileEquals(), "1,1,1");
         assertTo(seq2.takeWhileEquals(), "1,1,1");
     }
 
     @Test
     public void testToArray() {
-        Seq<Integer> seq1 = Seq.direct(1, 1, 2, 3, 4, 6);
-        ItrSeq<Integer> seq2 = Seq.of(1, 1, 2, 3, 4, 6);
+        Seq<Integer> seq1 = Seq.of(1, 1, 2, 3, 4, 6);
+        ItrSeq<Integer> seq2 = ItrSeq.of(1, 1, 2, 3, 4, 6);
         assertTo(Seq.of(seq1.toObjArray(Integer[]::new)), "1,1,2,3,4,6");
         assertTo(Seq.of(seq2.toObjArray(Integer[]::new)), "1,1,2,3,4,6");
     }
@@ -151,23 +162,20 @@ public class SeqTest {
     @Test
     public void testReducer() {
         Seq<Integer> seq = Seq.of(1, 2, null, 3, null, 4);
-        assertTo(seq.reduce(Reducer.filtering(Objects::nonNull, Reducer.mapping(Object::toString))), "1,2,3,4");
+        assertTo(seq.reduce(Reducer.of(Downstream.filterNotNull(), Reducer.mapping(Object::toString))), "1,2,3,4");
+        assertTo(seq.filterNotNull().reduce(Reducer.of(Downstream.map(Object::toString))), "1,2,3,4");
         assertTo(seq.filterNotNull().reduce(Reducer.mapping(Object::toString)), "1,2,3,4");
         assertTo(seq.filterNotNull().map(Object::toString), "1,2,3,4");
     }
 
     @Test
     public void testDuplicate() {
-        ItrSeq<Integer> seq1 = Seq.of(1, 2, 3, 4);
-        Seq<Integer> seq2 = Seq.direct(1, 2, 3, 4);
-        assertTo(seq1.duplicateIf(2, i -> i % 2 > 0), "1,1,2,3,3,4");
-        assertTo(seq2.duplicateIf(2, i -> i % 2 > 0), "1,1,2,3,3,4");
-        assertTo(seq1.duplicateEach(2), "1,1,2,2,3,3,4,4");
-        assertTo(seq2.duplicateEach(2), "1,1,2,2,3,3,4,4");
-        assertTo(seq1.duplicateAll(2), "1,2,3,4,1,2,3,4");
-        assertTo(seq2.duplicateAll(2), "1,2,3,4,1,2,3,4");
-        assertTo(seq1.circle().take(7), "1,2,3,4,1,2,3");
-        assertTo(seq2.circle().take(7), "1,2,3,4,1,2,3");
+        Seq<Integer> seq = Seq.of(1, 2, 3, 4);
+        assertTo(seq.duplicateIf(2, i -> i % 2 > 0), "1,1,2,3,3,4");
+        assertTo(seq.duplicateEach(2), "1,1,2,2,3,3,4,4");
+        assertTo(seq.duplicateAll(2), "1,2,3,4,1,2,3,4");
+        assertTo(seq.union(5), "1,2,3,4,5");
+        assertTo(seq.downstream(Downstream.union(5)), "1,2,3,4,5");
     }
 
     @Test
@@ -179,16 +187,16 @@ public class SeqTest {
     @Test
     public void testWindowed() {
         Seq<Integer> seq = Seq.of(1, 2, 3, 4, 5, 6, 7, 8, 9);
-        assertTo(seq.chunked(3).toList(), "[1, 2, 3],[4, 5, 6],[7, 8, 9]");
-        assertTo(seq.chunked(3).take(2).toList(), "[1, 2, 3],[4, 5, 6]");
-        assertTo(seq.chunked(3).drop(2).toList(), "[7, 8, 9]");
-        assertTo(seq.chunked(4).toList(), "[1, 2, 3, 4],[5, 6, 7, 8],[9]");
-        assertTo(seq.windowed(3, 1, true).toList(), "[1, 2, 3],[2, 3, 4],[3, 4, 5],[4, 5, 6],[5, 6, 7],[6, 7, 8],[7, 8, 9],[8, 9],[9]");
-        assertTo(seq.windowed(3, 1, false).toList(), "[1, 2, 3],[2, 3, 4],[3, 4, 5],[4, 5, 6],[5, 6, 7],[6, 7, 8],[7, 8, 9]");
-        assertTo(seq.windowed(3, 2, true).toList(), "[1, 2, 3],[3, 4, 5],[5, 6, 7],[7, 8, 9],[9]");
-        assertTo(seq.windowed(3, 2, false).toList(), "[1, 2, 3],[3, 4, 5],[5, 6, 7],[7, 8, 9]");
-        assertTo(seq.windowed(3, 4, true).toList(), "[1, 2, 3],[5, 6, 7],[9]");
-        assertTo(seq.windowed(3, 4, false).toList(), "[1, 2, 3],[5, 6, 7]");
+        assertTo(seq.chunked(3), "[1, 2, 3],[4, 5, 6],[7, 8, 9]");
+        assertTo(seq.chunked(3).take(2), "[1, 2, 3],[4, 5, 6]");
+        assertTo(seq.chunked(3).drop(2), "[7, 8, 9]");
+        assertTo(seq.chunked(4), "[1, 2, 3, 4],[5, 6, 7, 8],[9]");
+        assertTo(seq.windowed(3, 1, true, Reducer.toList()), "[1, 2, 3],[2, 3, 4],[3, 4, 5],[4, 5, 6],[5, 6, 7],[6, 7, 8],[7, 8, 9],[8, 9],[9]");
+        assertTo(seq.windowed(3, 1, false, Reducer.toList()), "[1, 2, 3],[2, 3, 4],[3, 4, 5],[4, 5, 6],[5, 6, 7],[6, 7, 8],[7, 8, 9]");
+        assertTo(seq.windowed(3, 2, true, Reducer.toList()), "[1, 2, 3],[3, 4, 5],[5, 6, 7],[7, 8, 9],[9]");
+        assertTo(seq.windowed(3, 2, false, Reducer.toList()), "[1, 2, 3],[3, 4, 5],[5, 6, 7],[7, 8, 9]");
+        assertTo(seq.windowed(3, 4, true, Reducer.toList()), "[1, 2, 3],[5, 6, 7],[9]");
+        assertTo(seq.windowed(3, 4, false, Reducer.toList()), "[1, 2, 3],[5, 6, 7]");
     }
 
     @Test

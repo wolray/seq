@@ -26,10 +26,10 @@ public class BatchedSeq<T> implements SizedSeq<T> {
     }
 
     @Override
-    public boolean until(Predicate<T> stop) {
+    public boolean any(Predicate<T> predicate) {
         for (ArrayList<T> ts : list) {
             for (T t : ts) {
-                if (stop.test(t)) {
+                if (predicate.test(t)) {
                     return true;
                 }
             }

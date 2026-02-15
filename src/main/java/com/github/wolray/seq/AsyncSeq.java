@@ -22,8 +22,8 @@ public abstract class AsyncSeq<T> implements Seq<T> {
     public <E> AsyncSeq<E> map(Function<T, E> function) {
         return new AsyncSeq<E>(async, source.map(function)) {
             @Override
-            public boolean until(Predicate<E> stop) {
-                return source.until(stop);
+            public boolean any(Predicate<E> stop) {
+                return source.any(stop);
             }
         };
     }
@@ -42,8 +42,8 @@ public abstract class AsyncSeq<T> implements Seq<T> {
     public AsyncSeq<T> onCompletion(Runnable runnable) {
         return new AsyncSeq<T>(async, source) {
             @Override
-            public boolean until(Predicate<T> stop) {
-                boolean flag = source.until(stop);
+            public boolean any(Predicate<T> stop) {
+                boolean flag = source.any(stop);
                 runnable.run();
                 return flag;
             }
@@ -53,9 +53,9 @@ public abstract class AsyncSeq<T> implements Seq<T> {
     public AsyncSeq<T> onStart(Runnable runnable) {
         return new AsyncSeq<T>(async, source) {
             @Override
-            public boolean until(Predicate<T> stop) {
+            public boolean any(Predicate<T> stop) {
                 runnable.run();
-                return source.until(stop);
+                return source.any(stop);
             }
         };
     }

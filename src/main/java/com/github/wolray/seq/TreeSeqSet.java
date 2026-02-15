@@ -8,7 +8,7 @@ import java.util.TreeSet;
 /**
  * @author wolray
  */
-public class TreeSeqSet<T> extends TreeSet<T> implements SizedSeq<T> {
+public class TreeSeqSet<T> extends TreeSet<T> implements CollectionSeq<T> {
     public TreeSeqSet() {}
 
     public TreeSeqSet(Collection<? extends T> c) {

@@ -7,7 +7,7 @@ import java.util.function.Predicate;
 /**
  * @author wolray
  */
-public class SeqList<T> extends ArrayList<T> implements SizedSeq<T> {
+public class SeqList<T> extends ArrayList<T> implements CollectionSeq<T> {
     public SeqList() {}
 
     public SeqList(Collection<? extends T> c) {
