@@ -125,10 +125,6 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
         return p -> t -> p.test(function.apply(t));
     }
 
-    static <T, E> Downstream<T, E> mapIf(BiPredicate<Predicate<E>, T> predicate) {
-        return p -> t -> predicate.test(p, t);
-    }
-
     static <T, E> Downstream<T, E> mapIndexed(Seq.IntObjFunction<T, E> function) {
         return p -> new Predicate<T>() {
             int i = 0;

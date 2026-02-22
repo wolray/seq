@@ -296,10 +296,6 @@ public interface Seq<T> {
         return downstream(Downstream.map(function));
     }
 
-    default <E> Seq<E> mapIf(BiPredicate<Predicate<E>, T> predicate) {
-        return downstream(Downstream.mapIf(predicate));
-    }
-
     default <E> Seq<E> mapIndexed(IntObjFunction<T, E> function) {
         return downstream(Downstream.mapIndexed(function));
     }
@@ -401,8 +397,8 @@ public interface Seq<T> {
         return zip(iterable).map(function);
     }
 
-    default <K, V> Seq2<K, V> mapIf2(BiPredicate<BiPredicate<K, V>, T> predicate) {
-        return p -> any(t -> predicate.test(p, t));
+    default <K, V> Seq2<K, V> downstream2(Function<BiPredicate<K, V>, Predicate<T>> function) {
+        return p -> any(function.apply(p));
     }
 
     default <E> Seq2<E, T> pairBy(Function<T, E> function) {

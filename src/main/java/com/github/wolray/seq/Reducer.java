@@ -503,10 +503,6 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
         return of(downstream, toList());
     }
 
-    static <T, E> Reducer<T, SeqList<E>> of(Downstream.Staged<T, E> downstream) {
-        return of(downstream, toList());
-    }
-
     static <T, E, V> Reducer<T, V> of(Downstream<T, E> downstream, Reducer<E, V> reducer) {
         return () -> {
             Worker<E, V> worker = reducer.get();
@@ -519,27 +515,6 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
 
                 @Override
                 public V result() {
-                    return worker.result();
-                }
-            };
-        };
-    }
-
-    static <T, E, V> Reducer<T, V> of(Downstream.Staged<T, E> downstream, Reducer<E, V> reducer) {
-        return () -> {
-            Worker<E, V> worker = reducer.get();
-            Downstream.StagedPredicate<T> predicate = downstream.apply(worker);
-            return new SignalWorker<T, V>() {
-                @Override
-                protected boolean accept(T t) {
-                    return predicate.test(t);
-                }
-
-                @Override
-                public V result() {
-                    if (!done) {
-                        done = predicate.after();
-                    }
                     return worker.result();
                 }
             };
@@ -576,6 +551,31 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
                 finisher.accept(v);
                 return v;
             }
+        };
+    }
+
+    static <T, E> Reducer<T, SeqList<E>> ofStaged(Downstream.Staged<T, E> downstream) {
+        return ofStaged(downstream, toList());
+    }
+
+    static <T, E, V> Reducer<T, V> ofStaged(Downstream.Staged<T, E> downstream, Reducer<E, V> reducer) {
+        return () -> {
+            Worker<E, V> worker = reducer.get();
+            Downstream.StagedPredicate<T> predicate = downstream.apply(worker);
+            return new SignalWorker<T, V>() {
+                @Override
+                protected boolean accept(T t) {
+                    return predicate.test(t);
+                }
+
+                @Override
+                public V result() {
+                    if (!done) {
+                        done = predicate.after();
+                    }
+                    return worker.result();
+                }
+            };
         };
     }
 

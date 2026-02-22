@@ -104,7 +104,7 @@ public class SeqTest {
         assert seq.groupBy(i -> i / 4, Reducer.first(i -> i % 4 == 0)).toString().equals("{0=0, 1=4, 2=null, 3=12}");
         assert seq.groupBy(i -> i / 4, Reducer.sumInt()).toString().equals("{0=6, 1=22, 2=21, 3=12}");
         assert seq.groupBy(i -> i / 4, Reducer.first()).toString().equals("{0=0, 1=4, 2=10, 3=12}");
-        assert seq.groupBy(i -> i / 4, Reducer.of(Downstream.chunked(2))).toString().equals("{0=[[0, 2], [1, 3]], 1=[[4, 6], [5, 7]], 2=[[10, 11]], 3=[[12]]}");
+        assert seq.groupBy(i -> i / 4, Reducer.ofStaged(Downstream.chunked(2))).toString().equals("{0=[[0, 2], [1, 3]], 1=[[4, 6], [5, 7]], 2=[[10, 11]], 3=[[12]]}");
     }
 
     @Test

@@ -81,12 +81,12 @@ public interface Seq2<K, V> {
         });
     }
 
-    default <T> Seq<T> map(BiFunction<K, V, T> function) {
-        return p -> any((k, v) -> p.test(function.apply(k, v)));
+    default <T> Seq<T> downstream(Function<Predicate<T>, BiPredicate<K, V>> function) {
+        return p -> any(function.apply(p));
     }
 
-    default <T> Seq<T> mapIf(Predicate3<Predicate<T>, K, V> predicate) {
-        return p -> any((k, v) -> predicate.test(p, k, v));
+    default <T> Seq<T> map(BiFunction<K, V, T> function) {
+        return p -> any((k, v) -> p.test(function.apply(k, v)));
     }
 
     default Seq<String> mapJoined(String sep) {
@@ -110,6 +110,10 @@ public interface Seq2<K, V> {
         return p -> seq.any(pair -> p.test(pair.first, pair.second));
     }
 
+    default <A, B> Seq2<A, B> downstream2(Function<BiPredicate<A, B>, BiPredicate<K, V>> function) {
+        return p -> any(function.apply(p));
+    }
+
     default Seq2<K, V> filter(BiPredicate<K, V> predicate) {
         return p -> any((k, v) -> predicate.test(k, v) && p.test(k, v));
     }
@@ -120,10 +124,6 @@ public interface Seq2<K, V> {
 
     default Seq2<K, V> filterByValue(Predicate<V> predicate) {
         return p -> any((k, v) -> predicate.test(v) && p.test(k, v));
-    }
-
-    default <A, B> Seq2<A, B> mapIf2(Predicate3<BiPredicate<A, B>, K, V> predicate) {
-        return p -> any((k, v) -> predicate.test(p, k, v));
     }
 
     default <T> Seq2<T, V> mapKeys(BiFunction<K, V, T> function) {
@@ -159,7 +159,7 @@ public interface Seq2<K, V> {
 
     default <T> SeqMap<K, T> groupBy(Reducer<V, T> reducer) {
         SeqMap<K, Reducer.Worker<V, T>> map = new SeqMap<>();
-        any((k, v) -> map.getOrCompute(k, reducer).test(v));
+        consume((k, v) -> map.getOrCompute(k, reducer).test(v));
         return map.mapValues(Reducer.Worker::result);
     }
 
