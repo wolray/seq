@@ -628,16 +628,4 @@ public interface Seq<T> {
         ts.consumeIndexed((i, t) -> a[i] = function.applyAsLong(t));
         return a;
     }
-
-    interface IntObjConsumer<T> {
-        void accept(int i, T t);
-    }
-
-    interface IntObjFunction<T, E> {
-        E apply(int i, T t);
-    }
-
-    interface IntObjPredicate<T> {
-        boolean test(int i, T t);
-    }
 }

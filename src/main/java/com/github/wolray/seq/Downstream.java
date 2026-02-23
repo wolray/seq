@@ -1,9 +1,6 @@
 package com.github.wolray.seq;
 
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.Optional;
-import java.util.Queue;
+import java.util.*;
 import java.util.function.*;
 
 public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
@@ -83,7 +80,7 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
         return p -> t -> predicate.test(t) && p.test(t);
     }
 
-    static <T> Downstream<T, T> filterIndexed(Seq.IntObjPredicate<T> predicate) {
+    static <T> Downstream<T, T> filterIndexed(IntObjPredicate<T> predicate) {
         return p -> new Predicate<T>() {
             int i = 0;
 
@@ -125,7 +122,7 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
         return p -> t -> p.test(function.apply(t));
     }
 
-    static <T, E> Downstream<T, E> mapIndexed(Seq.IntObjFunction<T, E> function) {
+    static <T, E> Downstream<T, E> mapIndexed(IntObjFunction<T, E> function) {
         return p -> new Predicate<T>() {
             int i = 0;
 
@@ -143,7 +140,7 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
         };
     }
 
-    static <T> Downstream<T, T> onEachIndexed(Seq.IntObjConsumer<T> consumer) {
+    static <T> Downstream<T, T> onEachIndexed(IntObjConsumer<T> consumer) {
         return p -> new Predicate<T>() {
             int i = 0;
 
