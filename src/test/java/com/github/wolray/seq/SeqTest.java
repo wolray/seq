@@ -23,6 +23,7 @@ public class SeqTest {
         assertTo(filtered1, "0,2,4,1,6");
         assertTo(filtered2, "0,2,4,1,6");
         assertTo(filtered1.replace(2, i -> i + 100), "100,102,4,1,6");
+        assertTo(filtered1.partial(4, Downstream.take(2)), "0,2,6");
 
         assertTo(filtered1.reverse(), "6,1,4,2,0");
         assertTo(filtered2.reverse(), "6,1,4,2,0");
@@ -54,6 +55,13 @@ public class SeqTest {
     }
 
     @Test
+    public void testAverage() {
+        Seq<Integer> seq = ItrSeq.range(10);
+        assert seq.average((f, t) -> f.accept(t, 1)) == 4.5;
+        assert seq.average((f, t) -> f.accept(t, t)) == 19.0 / 3;
+    }
+
+    @Test
     public void testRunningFold() {
         ItrSeq<Integer> seq1 = ItrSeq.of(2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
         Seq<Integer> seq2 = Seq.of(2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
@@ -69,13 +77,13 @@ public class SeqTest {
         Pair<SeqList<Integer>, SeqList<Integer>> pair1 = seq.reduce(Reducer.partition(i -> (i & 1) > 0));
         assertTo(pair1.first, "1,3,5,7,11");
         assertTo(pair1.second, "0,2,4,6,10,12");
-        Pair<Integer, Integer> pair2 = seq.reduce(Reducer.partition(i -> (i & 1) > 0, Reducer.first()));
+        Pair<Integer, Integer> pair2 = seq.reduce(Reducer.partition(i -> (i & 1) > 0, Reducer::first));
         assert pair2.first.equals(1);
         assert pair2.second.equals(0);
-        Pair<Integer, Integer> pair3 = seq.reduce(Reducer.partition(i -> (i & 1) > 0, Reducer.first(i -> i > 4)));
+        Pair<Integer, Integer> pair3 = seq.reduce(Reducer.partition(i -> (i & 1) > 0, () -> Reducer.first(i -> i > 4)));
         assert pair3.first.equals(5);
         assert pair3.second.equals(6);
-        Pair<SeqList<Integer>, SeqList<Integer>> pair4 = seq.reduce(Reducer.partition(i -> (i & 1) > 0, Reducer.of(Downstream.take(4))));
+        Pair<SeqList<Integer>, SeqList<Integer>> pair4 = seq.reduce(Reducer.partition(i -> (i & 1) > 0, () -> Reducer.of(Downstream.take(4))));
         assertTo(pair4.first, "1,3,5,7");
         assertTo(pair4.second, "0,2,4,6");
     }
@@ -88,23 +96,23 @@ public class SeqTest {
         assertTo(seq.chunked(3).map(function), "|", "0,2,4|1,6,3|5,7,10|11,12");
         assertTo(seq.chunked(4).map(function), "|", "0,2,4,1|6,3,5,7|10,11,12");
         assertTo(seq.chunked(5).map(function), "|", "0,2,4,1,6|3,5,7,10,11|12");
-        assertTo(seq.windowed(5, 3, true, Reducer.toList()).map(function), "|", "0,2,4,1,6|1,6,3,5,7|5,7,10,11,12|11,12");
-        assertTo(seq.windowed(5, 3, false, Reducer.toList()).map(function), "|", "0,2,4,1,6|1,6,3,5,7|5,7,10,11,12");
+        assertTo(seq.windowed(5, 3, true, Reducer::toList).map(function), "|", "0,2,4,1,6|1,6,3,5,7|5,7,10,11,12|11,12");
+        assertTo(seq.windowed(5, 3, false, Reducer::toList).map(function), "|", "0,2,4,1,6|1,6,3,5,7|5,7,10,11,12");
         assertTo(Seq.of(1, 2, 3, 4).chunked(2).map(function), "|", "1,2|3,4");
         Seq<Integer> empty = Seq.empty();
         Seq<SeqList<Integer>> chunked = empty.chunked(2);
         assertTo(chunked, "[]");
-        assertTo(seq.chunked(4, Reducer.of(Downstream.take(2))).map(function), "|", "0,2|6,3|10,11");
+        assertTo(seq.chunked(4, () -> Reducer.of(Downstream.take(2))).map(function), "|", "0,2|6,3|10,11");
     }
 
     @Test
     public void testGroupBy() {
         Seq<Integer> seq = Seq.of(0, 2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
         assert seq.groupBy(i -> i / 4).toString().equals("{0=[0, 2, 1, 3], 1=[4, 6, 5, 7], 2=[10, 11], 3=[12]}");
-        assert seq.groupBy(i -> i / 4, Reducer.first(i -> i % 4 == 0)).toString().equals("{0=0, 1=4, 2=null, 3=12}");
-        assert seq.groupBy(i -> i / 4, Reducer.sumInt()).toString().equals("{0=6, 1=22, 2=21, 3=12}");
-        assert seq.groupBy(i -> i / 4, Reducer.first()).toString().equals("{0=0, 1=4, 2=10, 3=12}");
-        assert seq.groupBy(i -> i / 4, Reducer.ofStaged(Downstream.chunked(2))).toString().equals("{0=[[0, 2], [1, 3]], 1=[[4, 6], [5, 7]], 2=[[10, 11]], 3=[[12]]}");
+        assert seq.groupBy(i -> i / 4, () -> Reducer.first(i -> i % 4 == 0)).toString().equals("{0=0, 1=4, 2=null, 3=12}");
+        assert seq.groupBy(i -> i / 4, () -> Reducer.sumInt()).toString().equals("{0=6, 1=22, 2=21, 3=12}");
+        assert seq.groupBy(i -> i / 4, () -> Reducer.first()).toString().equals("{0=0, 1=4, 2=10, 3=12}");
+        assert seq.groupBy(i -> i / 4, () -> Reducer.ofStaged(Downstream.chunked(2))).toString().equals("{0=[[0, 2], [1, 3]], 1=[[4, 6], [5, 7]], 2=[[10, 11]], 3=[[12]]}");
     }
 
     @Test
@@ -165,7 +173,7 @@ public class SeqTest {
         assertTo(seq.reduce(Reducer.of(Downstream.filterNotNull(), Reducer.mapping(Object::toString))), "1,2,3,4");
         assertTo(seq.filterNotNull().reduce(Reducer.of(Downstream.map(Object::toString))), "1,2,3,4");
         assertTo(seq.filterNotNull().reduce(Reducer.mapping(Object::toString)), "1,2,3,4");
-        assertTo(seq.filterNotNull().map(Object::toString), "1,2,3,4");
+        assertTo(seq.filterNotNull().mapStr(), "1,2,3,4");
     }
 
     @Test
@@ -191,12 +199,12 @@ public class SeqTest {
         assertTo(seq.chunked(3).take(2), "[1, 2, 3],[4, 5, 6]");
         assertTo(seq.chunked(3).drop(2), "[7, 8, 9]");
         assertTo(seq.chunked(4), "[1, 2, 3, 4],[5, 6, 7, 8],[9]");
-        assertTo(seq.windowed(3, 1, true, Reducer.toList()), "[1, 2, 3],[2, 3, 4],[3, 4, 5],[4, 5, 6],[5, 6, 7],[6, 7, 8],[7, 8, 9],[8, 9],[9]");
-        assertTo(seq.windowed(3, 1, false, Reducer.toList()), "[1, 2, 3],[2, 3, 4],[3, 4, 5],[4, 5, 6],[5, 6, 7],[6, 7, 8],[7, 8, 9]");
-        assertTo(seq.windowed(3, 2, true, Reducer.toList()), "[1, 2, 3],[3, 4, 5],[5, 6, 7],[7, 8, 9],[9]");
-        assertTo(seq.windowed(3, 2, false, Reducer.toList()), "[1, 2, 3],[3, 4, 5],[5, 6, 7],[7, 8, 9]");
-        assertTo(seq.windowed(3, 4, true, Reducer.toList()), "[1, 2, 3],[5, 6, 7],[9]");
-        assertTo(seq.windowed(3, 4, false, Reducer.toList()), "[1, 2, 3],[5, 6, 7]");
+        assertTo(seq.windowed(3, 1, true, Reducer::toList), "[1, 2, 3],[2, 3, 4],[3, 4, 5],[4, 5, 6],[5, 6, 7],[6, 7, 8],[7, 8, 9],[8, 9],[9]");
+        assertTo(seq.windowed(3, 1, false, Reducer::toList), "[1, 2, 3],[2, 3, 4],[3, 4, 5],[4, 5, 6],[5, 6, 7],[6, 7, 8],[7, 8, 9]");
+        assertTo(seq.windowed(3, 2, true, Reducer::toList), "[1, 2, 3],[3, 4, 5],[5, 6, 7],[7, 8, 9],[9]");
+        assertTo(seq.windowed(3, 2, false, Reducer::toList), "[1, 2, 3],[3, 4, 5],[5, 6, 7],[7, 8, 9]");
+        assertTo(seq.windowed(3, 4, true, Reducer::toList), "[1, 2, 3],[5, 6, 7],[9]");
+        assertTo(seq.windowed(3, 4, false, Reducer::toList), "[1, 2, 3],[5, 6, 7]");
     }
 
     @Test

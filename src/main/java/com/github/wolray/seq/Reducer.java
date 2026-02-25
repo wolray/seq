@@ -7,9 +7,12 @@ import java.util.stream.Collector;
 /**
  * @author wolray
  */
-public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
+public interface Reducer<T, V> extends Predicate<T> {
+    V result();
+    boolean done();
+
     static <T> Reducer<T, Boolean> any(Predicate<T> predicate) {
-        return () -> new SignalWorker<T, Boolean>() {
+        return new SignalReducer<T, Boolean>() {
             @Override
             protected boolean accept(T t) {
                 return predicate.test(t);
@@ -22,38 +25,38 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
         };
     }
 
-    static <T> Reducer<T, Double> average(ToDoubleFunction<T> function) {
-        return average(function, t -> 1);
+    static <T> Reducer<T, Double> average(BiConsumer<AverageFolder, T> consumer) {
+        return collect(new AverageFolder(), consumer, AverageFolder::result);
     }
 
-    static <T> Reducer<T, Double> average(ToDoubleFunction<T> function, ToDoubleFunction<T> weightFunction) {
-        return () -> new SimpleWorker<T, Double>() {
-            double v = 0, w = 0;
+    static <T, C extends Collection<T>> Reducer<T, C> collect(C des) {
+        return of(des, Collection::add);
+    }
 
+    static <T, V, E> Reducer<T, E> collect(Collector<T, V, E> collector) {
+        return collect(collector.supplier().get(), collector.accumulator(), collector.finisher());
+    }
+
+    static <T, V, E> Reducer<T, E> collect(V des, BiConsumer<V, T> accumulator, Function<V, E> finisher) {
+        return new SimpleReducer<T, E>() {
             @Override
-            public void accept(T t) {
-                double wt = weightFunction.applyAsDouble(t);
-                v += function.applyAsDouble(t) * wt;
-                w += wt;
+            protected void accept(T t) {
+                accumulator.accept(des, t);
             }
 
             @Override
-            public Double result() {
-                return w != 0 ? v / w : 0;
+            public E result() {
+                return finisher.apply(des);
             }
         };
     }
 
-    static <T, C extends Collection<T>> Reducer<T, C> collect(Supplier<C> des) {
-        return of(des, Collection::add);
-    }
-
     static <T> Reducer<T, Integer> count() {
-        return () -> new SimpleWorker<T, Integer>() {
+        return new SimpleReducer<T, Integer>() {
             int cnt = 0;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 cnt++;
             }
 
@@ -65,11 +68,11 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, Integer> count(Predicate<T> predicate) {
-        return () -> new SimpleWorker<T, Integer>() {
+        return new SimpleReducer<T, Integer>() {
             int cnt = 0;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 if (predicate.test(t)) {
                     cnt++;
                 }
@@ -87,7 +90,7 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, Optional<T>> find(Predicate<T> predicate) {
-        return () -> new SignalWorker<T, Optional<T>>() {
+        return new SignalReducer<T, Optional<T>>() {
             T value;
 
             @Override
@@ -107,7 +110,7 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, T> first() {
-        return () -> new SignalWorker<T, T>() {
+        return new SignalReducer<T, T>() {
             T value;
 
             @Override
@@ -124,7 +127,7 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, T> first(Predicate<T> predicate) {
-        return () -> new SignalWorker<T, T>() {
+        return new SignalReducer<T, T>() {
             T value;
 
             @Override
@@ -144,13 +147,12 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, T> fold(BinaryOperator<T> operator) {
-        return () -> new SignalWorker<T, T>() {
+        return new SimpleReducer<T, T>() {
             T cur = null;
 
             @Override
-            protected boolean accept(T t) {
+            protected void accept(T t) {
                 cur = cur == null ? t : operator.apply(cur, t);
-                return false;
             }
 
             @Override
@@ -161,11 +163,11 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, T> fold(T seed, BinaryOperator<T> operator) {
-        return () -> new SimpleWorker<T, T>() {
+        return new SimpleReducer<T, T>() {
             T cur = seed;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 cur = operator.apply(cur, t);
             }
 
@@ -176,28 +178,28 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
         };
     }
 
-    static <T, K, V> Reducer<T, SeqMap<K, V>> groupBy(Function<T, K> toKey, Reducer<T, V> reducer) {
-        return () -> new SimpleWorker<T, SeqMap<K, V>>() {
-            final SeqMap<K, Worker<T, V>> map = new SeqMap<>();
+    static <T, K, V> Reducer<T, SeqMap<K, V>> groupBy(Function<T, K> toKey, Supplier<Reducer<T, V>> factory) {
+        return new SimpleReducer<T, SeqMap<K, V>>() {
+            final SeqMap<K, Reducer<T, V>> map = new SeqMap<>();
 
             @Override
-            public void accept(T t) {
-                map.getOrCompute(toKey.apply(t), reducer).test(t);
+            protected void accept(T t) {
+                map.getOrCompute(toKey.apply(t), factory).test(t);
             }
 
             @Override
             public SeqMap<K, V> result() {
-                return map.mapValues(Worker::result);
+                return map.mapValues(Reducer::result);
             }
         };
     }
 
     static Reducer<String, String> join(String sep) {
-        return () -> new SimpleWorker<String, String>() {
+        return new SimpleReducer<String, String>() {
             final StringJoiner joiner = new StringJoiner(sep);
 
             @Override
-            public void accept(String t) {
+            protected void accept(String t) {
                 joiner.add(t);
             }
 
@@ -209,11 +211,11 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, String> join(String sep, Function<T, String> function) {
-        return () -> new SimpleWorker<T, String>() {
+        return new SimpleReducer<T, String>() {
             final StringJoiner joiner = new StringJoiner(sep);
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 joiner.add(function.apply(t));
             }
 
@@ -225,11 +227,11 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, T> last() {
-        return () -> new SimpleWorker<T, T>() {
+        return new SimpleReducer<T, T>() {
             T value;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 value = t;
             }
 
@@ -245,43 +247,39 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T, E, V> Reducer<T, V> mapping(Function<T, E> before, Reducer<E, V> reducer) {
-        return () -> new SignalWorker<T, V>() {
-            final Worker<E, V> worker = reducer.get();
-
+        return new SignalReducer<T, V>() {
             @Override
             protected boolean accept(T t) {
-                return worker.test(before.apply(t));
+                return reducer.test(before.apply(t));
             }
 
             @Override
             public V result() {
-                return worker.result();
+                return reducer.result();
             }
         };
     }
 
     static <T, V, E> Reducer<T, E> mapping(Reducer<T, V> reducer, Function<V, E> after) {
-        return () -> new SignalWorker<T, E>() {
-            final Worker<T, V> worker = reducer.get();
-
+        return new SignalReducer<T, E>() {
             @Override
             protected boolean accept(T t) {
-                return worker.test(t);
+                return reducer.test(t);
             }
 
             @Override
             public E result() {
-                return after.apply(worker.result());
+                return after.apply(reducer.result());
             }
         };
     }
 
     static <T> Reducer<T, T> max(Comparator<T> comparator) {
-        return () -> new SimpleWorker<T, T>() {
+        return new SimpleReducer<T, T>() {
             T max = null;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 if (max == null || comparator.compare(max, t) < 0) {
                     max = t;
                 }
@@ -295,12 +293,12 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T, V extends Comparable<V>> Reducer<T, Pair<T, V>> maxBy(Function<T, V> function) {
-        return () -> new SimpleWorker<T, Pair<T, V>>() {
+        return new SimpleReducer<T, Pair<T, V>>() {
             T max = null;
             V val = null;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 V v = function.apply(t);
                 if (val == null || val.compareTo(v) < 0) {
                     max = t;
@@ -316,12 +314,12 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, IntPair<T>> maxByInt(ToIntFunction<T> function) {
-        return () -> new SimpleWorker<T, IntPair<T>>() {
+        return new SimpleReducer<T, IntPair<T>>() {
             T max = null;
             int val = 0;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 int v = function.applyAsInt(t);
                 if (max == null || val < v) {
                     max = t;
@@ -337,12 +335,12 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, DoublePair<T>> maxByDouble(ToDoubleFunction<T> function) {
-        return () -> new SimpleWorker<T, DoublePair<T>>() {
+        return new SimpleReducer<T, DoublePair<T>>() {
             T max = null;
             double val = 0;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 double v = function.applyAsDouble(t);
                 if (max == null || val < v) {
                     max = t;
@@ -358,12 +356,12 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, LongPair<T>> maxByLong(ToLongFunction<T> function) {
-        return () -> new SimpleWorker<T, LongPair<T>>() {
+        return new SimpleReducer<T, LongPair<T>>() {
             T max = null;
             long val = 0;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 long v = function.applyAsLong(t);
                 if (max == null || val < v) {
                     max = t;
@@ -379,11 +377,11 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, T> min(Comparator<T> comparator) {
-        return () -> new SimpleWorker<T, T>() {
+        return new SimpleReducer<T, T>() {
             T min = null;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 if (min == null || comparator.compare(min, t) > 0) {
                     min = t;
                 }
@@ -397,12 +395,12 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T, V extends Comparable<V>> Reducer<T, Pair<T, V>> minBy(Function<T, V> function) {
-        return () -> new SimpleWorker<T, Pair<T, V>>() {
+        return new SimpleReducer<T, Pair<T, V>>() {
             T min = null;
             V val = null;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 V v = function.apply(t);
                 if (val == null || val.compareTo(v) > 0) {
                     min = t;
@@ -418,12 +416,12 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, IntPair<T>> minByInt(ToIntFunction<T> function) {
-        return () -> new SimpleWorker<T, IntPair<T>>() {
+        return new SimpleReducer<T, IntPair<T>>() {
             T min = null;
             int val = 0;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 int v = function.applyAsInt(t);
                 if (min == null || val > v) {
                     min = t;
@@ -439,12 +437,12 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, DoublePair<T>> minByDouble(ToDoubleFunction<T> function) {
-        return () -> new SimpleWorker<T, DoublePair<T>>() {
+        return new SimpleReducer<T, DoublePair<T>>() {
             T min = null;
             double val = 0;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 double v = function.applyAsDouble(t);
                 if (min == null || val > v) {
                     min = t;
@@ -460,12 +458,12 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, LongPair<T>> minByLong(ToLongFunction<T> function) {
-        return () -> new SimpleWorker<T, LongPair<T>>() {
+        return new SimpleReducer<T, LongPair<T>>() {
             T min = null;
             long val = 0;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 long v = function.applyAsLong(t);
                 if (min == null || val > v) {
                     min = t;
@@ -480,76 +478,50 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
         };
     }
 
-    static <T, V, E> Reducer<T, E> of(Collector<T, V, E> collector) {
-        Supplier<V> supplier = collector.supplier();
-        BiConsumer<V, T> accumulator = collector.accumulator();
-        Function<V, E> finisher = collector.finisher();
-        return () -> new SimpleWorker<T, E>() {
-            final V v = supplier.get();
-
-            @Override
-            public void accept(T t) {
-                accumulator.accept(v, t);
-            }
-
-            @Override
-            public E result() {
-                return finisher.apply(v);
-            }
-        };
-    }
-
     static <T, E> Reducer<T, SeqList<E>> of(Downstream<T, E> downstream) {
         return of(downstream, toList());
     }
 
     static <T, E, V> Reducer<T, V> of(Downstream<T, E> downstream, Reducer<E, V> reducer) {
-        return () -> {
-            Worker<E, V> worker = reducer.get();
-            Predicate<T> predicate = downstream.apply(worker);
-            return new SignalWorker<T, V>() {
-                @Override
-                protected boolean accept(T t) {
-                    return predicate.test(t);
-                }
-
-                @Override
-                public V result() {
-                    return worker.result();
-                }
-            };
-        };
-    }
-
-    static <T, V> Reducer<T, V> of(Supplier<V> supplier, BiConsumer<V, T> accumulator) {
-        return () -> new SimpleWorker<T, V>() {
-            final V v = supplier.get();
-
+        Predicate<T> predicate = downstream.apply(reducer);
+        return new SignalReducer<T, V>() {
             @Override
-            public void accept(T t) {
-                accumulator.accept(v, t);
+            protected boolean accept(T t) {
+                return predicate.test(t);
             }
 
             @Override
             public V result() {
-                return v;
+                return reducer.result();
             }
         };
     }
 
-    static <T, V> Reducer<T, V> of(Supplier<V> supplier, BiConsumer<V, T> accumulator, Consumer<V> finisher) {
-        return () -> new SimpleWorker<T, V>() {
-            final V v = supplier.get();
-
+    static <T, V> Reducer<T, V> of(V des, BiConsumer<V, T> accumulator) {
+        return new SimpleReducer<T, V>() {
             @Override
-            public void accept(T t) {
-                accumulator.accept(v, t);
+            protected void accept(T t) {
+                accumulator.accept(des, t);
             }
 
             @Override
             public V result() {
-                finisher.accept(v);
-                return v;
+                return des;
+            }
+        };
+    }
+
+    static <T, V> Reducer<T, V> of(V des, BiConsumer<V, T> accumulator, Consumer<V> finisher) {
+        return new SimpleReducer<T, V>() {
+            @Override
+            protected void accept(T t) {
+                accumulator.accept(des, t);
+            }
+
+            @Override
+            public V result() {
+                finisher.accept(des);
+                return des;
             }
         };
     }
@@ -559,54 +531,52 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T, E, V> Reducer<T, V> ofStaged(Downstream.Staged<T, E> downstream, Reducer<E, V> reducer) {
-        return () -> {
-            Worker<E, V> worker = reducer.get();
-            Downstream.StagedPredicate<T> predicate = downstream.apply(worker);
-            return new SignalWorker<T, V>() {
-                @Override
-                protected boolean accept(T t) {
-                    return predicate.test(t);
-                }
+        Downstream.StagedPredicate<T> predicate = downstream.apply(reducer);
+        return new SignalReducer<T, V>() {
+            @Override
+            protected boolean accept(T t) {
+                return predicate.test(t);
+            }
 
-                @Override
-                public V result() {
-                    if (!done) {
-                        done = predicate.after();
-                    }
-                    return worker.result();
+            @Override
+            public V result() {
+                if (!done) {
+                    done = predicate.after();
                 }
-            };
+                return reducer.result();
+            }
         };
     }
 
     static <T> Reducer<T, Pair<SeqList<T>, SeqList<T>>> partition(Predicate<T> predicate) {
-        return partition(predicate, toList());
+        return partition(predicate, Reducer::toList);
     }
 
-    static <T, V> Reducer<T, Pair<V, V>> partition(Predicate<T> predicate, Reducer<T, V> reducer) {
-        return () -> new SignalWorker<T, Pair<V, V>>() {
-            final Worker<T, V> first = reducer.get();
-            final Worker<T, V> second = reducer.get();
+    static <T, V> Reducer<T, Pair<V, V>> partition(Predicate<T> predicate, Supplier<Reducer<T, V>> factory) {
+        return partition(predicate, factory.get(), factory.get());
+    }
 
+    static <T, K, V> Reducer<T, Pair<K, V>> partition(Predicate<T> predicate, Reducer<T, K> r1, Reducer<T, V> r2) {
+        return new SignalReducer<T, Pair<K, V>>() {
             @Override
             protected boolean accept(T t) {
                 if (predicate.test(t)) {
-                    first.test(t);
+                    r1.test(t);
                 } else {
-                    second.test(t);
+                    r2.test(t);
                 }
-                return first.done() && second.done();
+                return r1.done() && r2.done();
             }
 
             @Override
-            public Pair<V, V> result() {
-                return new Pair<>(first.result(), second.result());
+            public Pair<K, V> result() {
+                return new Pair<>(r1.result(), r2.result());
             }
         };
     }
 
     static <T> Reducer<T, SeqList<T>> reverse() {
-        return of(SeqList::new, SeqList::add, Collections::reverse);
+        return of(new SeqList<>(), SeqList::add, Collections::reverse);
     }
 
     static <T> Reducer<T, SeqList<T>> sort() {
@@ -614,7 +584,7 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, SeqList<T>> sort(Comparator<T> comparator) {
-        return of(SeqList::new, SeqList::add, ts -> ts.sort(comparator));
+        return of(new SeqList<>(), SeqList::add, ts -> ts.sort(comparator));
     }
 
     static <T, V extends Comparable<V>> Reducer<T, SeqList<T>> sort(Function<T, V> function) {
@@ -634,11 +604,11 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static Reducer<Double, Double> sum() {
-        return () -> new SimpleWorker<Double, Double>() {
+        return new SimpleReducer<Double, Double>() {
             double s = 0;
 
             @Override
-            public void accept(Double t) {
+            protected void accept(Double t) {
                 s += t;
             }
 
@@ -650,11 +620,11 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, Double> sum(ToDoubleFunction<T> function) {
-        return () -> new SimpleWorker<T, Double>() {
+        return new SimpleReducer<T, Double>() {
             double s = 0;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 s += function.applyAsDouble(t);
             }
 
@@ -666,11 +636,11 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static Reducer<Integer, Integer> sumInt() {
-        return () -> new SimpleWorker<Integer, Integer>() {
+        return new SimpleReducer<Integer, Integer>() {
             int s = 0;
 
             @Override
-            public void accept(Integer t) {
+            protected void accept(Integer t) {
                 s += t;
             }
 
@@ -682,11 +652,11 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, Integer> sumInt(ToIntFunction<T> function) {
-        return () -> new SimpleWorker<T, Integer>() {
+        return new SimpleReducer<T, Integer>() {
             int s = 0;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 s += function.applyAsInt(t);
             }
 
@@ -698,11 +668,11 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static Reducer<Long, Long> sumLong() {
-        return () -> new SimpleWorker<Long, Long>() {
+        return new SimpleReducer<Long, Long>() {
             long s = 0;
 
             @Override
-            public void accept(Long t) {
+            protected void accept(Long t) {
                 s += t;
             }
 
@@ -714,11 +684,11 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, Long> sumLong(ToLongFunction<T> function) {
-        return () -> new SimpleWorker<T, Long>() {
+        return new SimpleReducer<T, Long>() {
             long s = 0;
 
             @Override
-            public void accept(T t) {
+            protected void accept(T t) {
                 s += function.applyAsLong(t);
             }
 
@@ -730,17 +700,15 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T, V> Reducer<T, V> then(Reducer<T, V> reducer, Consumer<V> action) {
-        return () -> new SignalWorker<T, V>() {
-            final Worker<T, V> worker = reducer.get();
-
+        return new SignalReducer<T, V>() {
             @Override
             protected boolean accept(T t) {
-                return worker.test(t);
+                return reducer.test(t);
             }
 
             @Override
             public V result() {
-                V res = worker.result();
+                V res = reducer.result();
                 action.accept(res);
                 return res;
             }
@@ -748,63 +716,38 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
     }
 
     static <T> Reducer<T, BatchedSeq<T>> toBatched() {
-        return of(BatchedSeq::new, BatchedSeq::add);
+        return of(new BatchedSeq<>(), BatchedSeq::add);
     }
 
     static <T> Reducer<T, ConcurrentSeq<T>> toConcurrent() {
-        return of(ConcurrentSeq::new, ConcurrentSeq::add);
+        return collect(new ConcurrentSeq<>());
     }
 
     static <T> Reducer<T, LinkedSeq<T>> toLinked() {
-        return of(LinkedSeq::new, LinkedSeq::add);
+        return collect(new LinkedSeq<>());
     }
 
     static <T> Reducer<T, SeqList<T>> toList() {
-        return of(SeqList::new, SeqList::add);
+        return collect(new SeqList<>());
     }
 
     static <T> Reducer<T, SeqList<T>> toList(int initialCapacity) {
-        return of(() -> new SeqList<>(initialCapacity), SeqList::add);
+        return collect(new SeqList<>(initialCapacity));
     }
 
-    static <T, K, V> Reducer<T, SeqMap<K, V>> toMap(Function<T, K> toKey, Function<T, V> toValue) {
-        return of(SeqMap::new, (m, t) -> m.put(toKey.apply(t), toValue.apply(t)));
-    }
-
-    static <T, K, V, M extends Map<K, V>> Reducer<T, M> toMap(Supplier<M> mapSupplier, Function<T, K> toKey, Function<T, V> toValue) {
-        return of(mapSupplier, (m, t) -> m.put(toKey.apply(t), toValue.apply(t)));
-    }
-
-    static <T, K> Reducer<T, SeqMap<K, T>> toMapBy(Function<T, K> toKey) {
-        return toMapBy(SeqMap::new, toKey);
-    }
-
-    static <T, K, M extends Map<K, T>> Reducer<T, M> toMapBy(Supplier<M> mapSupplier, Function<T, K> toKey) {
-        return of(mapSupplier, (m, t) -> m.put(toKey.apply(t), t));
-    }
-
-    static <T, V> Reducer<T, SeqMap<T, V>> toMapWith(Function<T, V> toValue) {
-        return toMapWith(SeqMap::new, toValue);
-    }
-
-    static <T, V, M extends Map<T, V>> Reducer<T, M> toMapWith(Supplier<M> mapSupplier, Function<T, V> toValue) {
-        return of(mapSupplier, (m, t) -> m.put(t, toValue.apply(t)));
+    static <T, K, V> Reducer<T, SeqMap<K, V>> toMap(BiConsumer<SeqMap<K, V>, T> consumer) {
+        return of(new SeqMap<>(), consumer);
     }
 
     static <T> Reducer<T, SeqSet<T>> toSet() {
-        return of(SeqSet::new, Set::add);
+        return collect(new SeqSet<>());
     }
 
     static <T> Reducer<T, SeqSet<T>> toSet(int initialCapacity) {
-        return of(() -> new SeqSet<>(initialCapacity), Set::add);
+        return collect(new SeqSet<>(initialCapacity));
     }
 
-    interface Worker<T, V> extends Predicate<T> {
-        V result();
-        boolean done();
-    }
-
-    abstract class SignalWorker<T, V> implements Worker<T, V> {
+    abstract class SignalReducer<T, V> implements Reducer<T, V> {
         protected boolean done;
 
         protected abstract boolean accept(T t);
@@ -819,7 +762,7 @@ public interface Reducer<T, V> extends Supplier<Reducer.Worker<T, V>> {
         }
     }
 
-    abstract class SimpleWorker<T, V> implements Worker<T, V> {
+    abstract class SimpleReducer<T, V> implements Reducer<T, V> {
         protected abstract void accept(T t);
 
         @Override

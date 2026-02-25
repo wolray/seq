@@ -27,7 +27,7 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
                 if (iterator.hasNext()) {
                     iterator.next();
                 } else {
-                    return Collections.emptyIterator();
+                    break;
                 }
             }
             return iterator;

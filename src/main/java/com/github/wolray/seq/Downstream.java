@@ -19,18 +19,7 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
     }
 
     static <T> Downstream<T, T> drop(int n) {
-        return p -> new Predicate<T>() {
-            int i = 0;
-
-            @Override
-            public boolean test(T t) {
-                if (i == n) {
-                    return p.test(t);
-                }
-                i++;
-                return false;
-            }
-        };
+        return partial(n, p -> t -> false);
     }
 
     static <T> Downstream<T, T> dropWhile(Predicate<T> predicate) {
@@ -152,9 +141,14 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
         };
     }
 
-    static <T> Downstream<T, T> replace(int n, UnaryOperator<T> operator) {
+    static <T> Downstream<T, T> partial(int n, Downstream<T, T> downstream) {
+        if (n <= 0) {
+            return p -> p;
+        }
         return p -> new Predicate<T>() {
+            final Predicate<T> alter = downstream.apply(p);
             int i = 1;
+            boolean flag = false;
 
             @Override
             public boolean test(T t) {
@@ -162,9 +156,16 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
                     return p.test(t);
                 }
                 i++;
-                return p.test(operator.apply(t));
+                if (!flag) {
+                    flag = alter.test(t);
+                }
+                return false;
             }
         };
+    }
+
+    static <T> Downstream<T, T> replace(int n, UnaryOperator<T> operator) {
+        return partial(n, Downstream.map(operator));
     }
 
     static <T, E> Downstream<T, E> runningFold(E init, BiFunction<E, T, E> function) {
@@ -222,25 +223,25 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
         };
     }
 
-    static <T, V> Downstream<T, V> windowedByTime(long timeMillis, Reducer<T, V> reducer) {
+    static <T, V> Downstream<T, V> windowedByTime(long timeMillis, Supplier<Reducer<T, V>> factory) {
         if (timeMillis <= 0) {
             throw new IllegalArgumentException("non-positive time");
         }
         return p -> new Predicate<T>() {
             long last = System.currentTimeMillis();
-            Reducer.Worker<T, V> worker = reducer.get();
+            Reducer<T, V> reducer = factory.get();
 
             @Override
             public boolean test(T t) {
                 long now = System.currentTimeMillis();
                 if (now - last > timeMillis) {
                     last = now;
-                    if (p.test(worker.result())) {
+                    if (p.test(reducer.result())) {
                         return true;
                     }
-                    worker = reducer.get();
+                    reducer = factory.get();
                 }
-                return worker.test(t);
+                return reducer.test(t);
             }
         };
     }
@@ -261,35 +262,35 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
     }
 
     static <T> Staged<T, SeqList<T>> chunked(int size) {
-        return chunked(size, Reducer.toList());
+        return chunked(size, Reducer::toList);
     }
 
-    static <T, V> Staged<T, V> chunked(int size, Reducer<T, V> reducer) {
+    static <T, V> Staged<T, V> chunked(int size, Supplier<Reducer<T, V>> factory) {
         if (size <= 0) {
             throw new IllegalArgumentException("non-positive size");
         }
         return p -> new StagedPredicate<T>() {
-            Reducer.Worker<T, V> worker = reducer.get();
+            Reducer<T, V> reducer = factory.get();
             int idx = 0;
 
             @Override
             public boolean test(T t) {
                 if (idx == size) {
-                    if (p.test(worker.result())) {
-                        worker = null;
+                    if (p.test(reducer.result())) {
+                        reducer = null;
                         return true;
                     }
-                    worker = reducer.get();
+                    reducer = factory.get();
                     idx = 0;
                 }
-                worker.test(t);
+                reducer.test(t);
                 idx++;
                 return false;
             }
 
             @Override
             public boolean after() {
-                return worker != null && p.test(worker.result());
+                return reducer != null && p.test(reducer.result());
             }
         };
     }
@@ -327,27 +328,27 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
         };
     }
 
-    static <T, V> Staged<T, V> windowed(int size, int step, boolean allowPartial, Reducer<T, V> reducer) {
+    static <T, V> Staged<T, V> windowed(int size, int step, boolean allowPartial, Supplier<Reducer<T, V>> factory) {
         if (size <= 0 || step <= 0) {
             throw new IllegalArgumentException("non-positive size or step");
         }
         return p -> new StagedPredicate<T>() {
-            final Queue<IntPair<Reducer.Worker<T, V>>> queue = new LinkedList<>();
+            final Queue<IntPair<Reducer<T, V>>> queue = new LinkedList<>();
             int i = 0;
 
             @Override
             public boolean test(T t) {
                 if (i == 0) {
                     i = step;
-                    queue.offer(new IntPair<>(0, reducer.get()));
+                    queue.offer(new IntPair<>(0, factory.get()));
                 }
-                for (IntPair<Reducer.Worker<T, V>> sub : queue) {
+                for (IntPair<Reducer<T, V>> sub : queue) {
                     if (sub.it.test(t)) {
                         break;
                     }
                     sub.intVal++;
                 }
-                IntPair<Reducer.Worker<T, V>> first = queue.peek();
+                IntPair<Reducer<T, V>> first = queue.peek();
                 if (first != null && first.intVal == size) {
                     queue.poll();
                     if (p.test(first.it.result())) {

@@ -154,13 +154,13 @@ public interface Seq2<K, V> {
     }
 
     default SeqMap<K, SeqList<V>> groupBy() {
-        return groupBy(Reducer.toList());
+        return groupBy(Reducer::toList);
     }
 
-    default <T> SeqMap<K, T> groupBy(Reducer<V, T> reducer) {
-        SeqMap<K, Reducer.Worker<V, T>> map = new SeqMap<>();
+    default <T> SeqMap<K, T> groupBy(Supplier<Reducer<V, T>> reducer) {
+        SeqMap<K, Reducer<V, T>> map = new SeqMap<>();
         consume((k, v) -> map.getOrCompute(k, reducer).test(v));
-        return map.mapValues(Reducer.Worker::result);
+        return map.mapValues(Reducer::result);
     }
 
     default SeqMap<K, V> toMap() {

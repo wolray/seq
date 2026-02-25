@@ -98,12 +98,13 @@ public interface Seq<T> {
     }
 
     default void consumeIndexed(IntObjConsumer<T> consumer) {
-        consume(new Consumer<T>() {
+        any(new Predicate<T>() {
             int index = 0;
 
             @Override
-            public void accept(T t) {
+            public boolean test(T t) {
                 consumer.accept(index++, t);
+                return false;
             }
         });
     }
@@ -133,13 +134,15 @@ public interface Seq<T> {
     }
 
     default <E> E reduce(Reducer<T, E> reducer) {
-        Reducer.Worker<T, E> worker = reducer.get();
-        any(worker);
-        return worker.result();
+        any(reducer);
+        return reducer.result();
     }
 
     default <E> E reduce(E des, BiConsumer<E, T> accumulator) {
-        consume(t -> accumulator.accept(des, t));
+        any(t -> {
+            accumulator.accept(des, t);
+            return false;
+        });
         return des;
     }
 
@@ -191,11 +194,11 @@ public interface Seq<T> {
     }
 
     default Seq<SeqList<T>> chunked(int size) {
-        return chunked(size, Reducer.toList(size));
+        return chunked(size, () -> Reducer.toList(size));
     }
 
-    default <V> Seq<V> chunked(int size, Reducer<T, V> reducer) {
-        return downstream(Downstream.chunked(size, reducer));
+    default <V> Seq<V> chunked(int size, Supplier<Reducer<T, V>> factory) {
+        return downstream(Downstream.chunked(size, factory));
     }
 
     default Seq<T> distinct() {
@@ -296,6 +299,10 @@ public interface Seq<T> {
         return downstream(Downstream.map(function));
     }
 
+    default Seq<String> mapStr() {
+        return downstream(Downstream.map(Objects::toString));
+    }
+
     default <E> Seq<E> mapIndexed(IntObjFunction<T, E> function) {
         return downstream(Downstream.mapIndexed(function));
     }
@@ -308,8 +315,12 @@ public interface Seq<T> {
         return downstream(Downstream.onEachIndexed(consumer));
     }
 
+    default Seq<T> partial(int n, Downstream<T, T> downstream) {
+        return n <= 0 ? this : downstream(Downstream.partial(n, downstream));
+    }
+
     default Seq<T> replace(int n, UnaryOperator<T> operator) {
-        return downstream(Downstream.replace(n, operator));
+        return partial(n, Downstream.map(operator));
     }
 
     default <E> Seq<E> runningFold(E init, BiFunction<E, T, E> function) {
@@ -361,12 +372,12 @@ public interface Seq<T> {
         return p -> any(p) || seq.any(p);
     }
 
-    default <V> Seq<V> windowed(int size, int step, boolean allowPartial, Reducer<T, V> reducer) {
-        return downstream(Downstream.windowed(size, step, allowPartial, reducer));
+    default <V> Seq<V> windowed(int size, int step, boolean allowPartial, Supplier<Reducer<T, V>> factory) {
+        return downstream(Downstream.windowed(size, step, allowPartial, factory));
     }
 
-    default <V> Seq<V> windowedByTime(long timeMillis, Reducer<T, V> reducer) {
-        return downstream(Downstream.windowedByTime(timeMillis, reducer));
+    default <V> Seq<V> windowedByTime(long timeMillis, Supplier<Reducer<T, V>> factory) {
+        return downstream(Downstream.windowedByTime(timeMillis, factory));
     }
 
     default Seq<IntPair<T>> withInt(ToIntFunction<T> function) {
@@ -472,31 +483,23 @@ public interface Seq<T> {
     }
 
     default <K> SeqMap<K, SeqList<T>> groupBy(Function<T, K> toKey) {
-        return reduce(Reducer.groupBy(toKey, Reducer.toList()));
+        return reduce(Reducer.groupBy(toKey, Reducer::toList));
     }
 
     default <K> SeqMap<K, T> groupBy(Function<T, K> toKey, BinaryOperator<T> operator) {
-        return reduce(Reducer.groupBy(toKey, Reducer.fold(operator)));
+        return reduce(Reducer.groupBy(toKey, () -> Reducer.fold(operator)));
     }
 
     default <K, E> SeqMap<K, SeqList<E>> groupBy(Function<T, K> toKey, Function<T, E> toValue) {
-        return groupBy(toKey, Reducer.mapping(toValue));
+        return groupBy(toKey, () -> Reducer.mapping(toValue));
     }
 
-    default <K, V> SeqMap<K, V> groupBy(Function<T, K> toKey, Reducer<T, V> reducer) {
-        return reduce(Reducer.groupBy(toKey, reducer));
+    default <K, V> SeqMap<K, V> groupBy(Function<T, K> toKey, Supplier<Reducer<T, V>> factory) {
+        return reduce(Reducer.groupBy(toKey, factory));
     }
 
-    default <K, V> SeqMap<K, V> toMap(Function<T, K> toKey, Function<T, V> toValue) {
-        return reduce(Reducer.toMap(() -> new SeqMap<>(sizeOrDefault()), toKey, toValue));
-    }
-
-    default <K> SeqMap<K, T> toMapBy(Function<T, K> toKey) {
-        return toMap(toKey, v -> v);
-    }
-
-    default <V> SeqMap<T, V> toMapWith(Function<T, V> toValue) {
-        return toMap(k -> k, toValue);
+    default <K, V> SeqMap<K, V> toMap(BiConsumer<SeqMap<K, V>, T> consumer) {
+        return reduce(new SeqMap<>(sizeOrDefault()), consumer);
     }
 
     default SeqSet<T> toSet() {
@@ -572,12 +575,8 @@ public interface Seq<T> {
         return a;
     }
 
-    default double average(ToDoubleFunction<T> function) {
-        return average(function, null);
-    }
-
-    default double average(ToDoubleFunction<T> function, ToDoubleFunction<T> weightFunction) {
-        return reduce(Reducer.average(function, weightFunction));
+    default double average(BiConsumer<AverageFolder, T> consumer) {
+        return reduce(Reducer.average(consumer));
     }
 
     default double sum(ToDoubleFunction<T> function) {
