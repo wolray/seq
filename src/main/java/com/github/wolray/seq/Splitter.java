@@ -6,6 +6,7 @@ import java.util.regex.Pattern;
 /**
  * @author wolray
  */
+@FunctionalInterface
 public interface Splitter {
     Seq<String> split(String s);
 

@@ -9,6 +9,7 @@ import java.util.function.Predicate;
 /**
  * @author wolray
  */
+@FunctionalInterface
 public interface SeqExpand<T> extends Function<T, Seq<T>> {
     static <T> SeqExpand<T> of(Function<T, Seq<T>> function) {
         return function instanceof SeqExpand ? (SeqExpand<T>)function : function::apply;

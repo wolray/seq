@@ -7,6 +7,7 @@ import java.util.function.*;
 /**
  * @author wolray
  */
+@FunctionalInterface
 public interface Seq2<K, V> {
     boolean any(BiPredicate<K, V> predicate);
 

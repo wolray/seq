@@ -5,6 +5,7 @@ import java.io.*;
 /**
  * @author wolray
  */
+@FunctionalInterface
 public interface IOChain<T> {
     T call() throws IOException;
 

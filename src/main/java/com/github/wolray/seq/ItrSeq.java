@@ -6,6 +6,7 @@ import java.util.function.*;
 /**
  * @author wolray
  */
+@FunctionalInterface
 public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
     @Override
     default void consume(Consumer<T> consumer) {
@@ -396,9 +397,5 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
                 return flag ? pop(iterator) : set(t);
             }
         };
-    }
-
-    default <E> ItrSeq<E> copyIf(BiPredicate<Puller<E>, T> predicate) {
-        return () -> copyIf(iterator(), predicate);
     }
 }

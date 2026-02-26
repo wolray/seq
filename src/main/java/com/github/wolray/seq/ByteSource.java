@@ -11,6 +11,7 @@ import java.util.function.Supplier;
 /**
  * @author wolray
  */
+@FunctionalInterface
 public interface ByteSource extends IOChain.Closable<InputStream> {
     static ByteSource of(File file) {
         return of(file.toPath());

@@ -3,6 +3,7 @@ package com.github.wolray.seq;
 import java.util.*;
 import java.util.function.*;
 
+@FunctionalInterface
 public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
     static <T> Downstream<T, T> distinct() {
         return p -> {
@@ -82,6 +83,10 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
 
     static <T, E extends T> Downstream<T, E> filterInstance(Class<E> cls) {
         return p -> t -> cls.isInstance(t) && p.test(cls.cast(t));
+    }
+
+    static <T> Downstream<T, T> filterNot(Predicate<T> predicate) {
+        return p -> t -> !predicate.test(t) && p.test(t);
     }
 
     static <T> Downstream<T, T> filterNotNull() {

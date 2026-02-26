@@ -8,6 +8,7 @@ import java.util.regex.Pattern;
 /**
  * @author wolray
  */
+@FunctionalInterface
 public interface Seq<T> {
     boolean any(Predicate<T> predicate);
 
@@ -268,7 +269,7 @@ public interface Seq<T> {
     }
 
     default Seq<T> filterNot(Predicate<T> predicate) {
-        return filter(predicate.negate());
+        return downstream(Downstream.filterNot(predicate));
     }
 
     default Seq<T> filterNotIn(Collection<T> collection) {
@@ -299,12 +300,12 @@ public interface Seq<T> {
         return downstream(Downstream.map(function));
     }
 
-    default Seq<String> mapStr() {
-        return downstream(Downstream.map(Objects::toString));
-    }
-
     default <E> Seq<E> mapIndexed(IntObjFunction<T, E> function) {
         return downstream(Downstream.mapIndexed(function));
+    }
+
+    default Seq<String> mapStr() {
+        return downstream(Downstream.map(Objects::toString));
     }
 
     default Seq<T> onEach(Consumer<T> consumer) {
