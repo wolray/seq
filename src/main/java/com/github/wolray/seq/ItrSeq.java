@@ -284,28 +284,6 @@ public interface ItrSeq<T> extends Iterable<T>, Seq<T> {
         return of(Arrays.asList(ts));
     }
 
-    static ItrSeq<Integer> range(int n) {
-        return () -> new Puller<Integer>() {
-            @Override
-            public boolean hasNext() {
-                return index < n && setAndIncrease(index);
-            }
-        };
-    }
-
-    static ItrSeq<Integer> range(int start, int stop) {
-        return () -> new Puller<Integer>() {
-            {
-                index = start;
-            }
-
-            @Override
-            public boolean hasNext() {
-                return index < stop && setAndIncrease(index);
-            }
-        };
-    }
-
     static <T> ItrSeq<T> repeat(int n, T t) {
         return () -> new Puller<T>() {
             @Override

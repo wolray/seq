@@ -126,29 +126,12 @@ public interface Seq<T> {
         return reduce(new BatchedSeq<>(), BatchedSeq::add);
     }
 
-    default <C extends Collection<T>> C collectBy(IntFunction<C> constructor) {
-        return reduce(constructor.apply(sizeOrDefault()), Collection::add);
-    }
-
     default ConcurrentSeq<T> toConcurrent() {
         return reduce(new ConcurrentSeq<>(), ConcurrentSeq::add);
     }
 
-    default <E> E reduce(Reducer<T, E> reducer) {
-        any(reducer);
-        return reducer.result();
-    }
-
-    default <E> E reduce(E des, BiConsumer<E, T> accumulator) {
-        any(t -> {
-            accumulator.accept(des, t);
-            return false;
-        });
-        return des;
-    }
-
-    default <E, V> E reduce(Reducer<T, V> reducer, Function<V, E> function) {
-        return function.apply(reduce(reducer));
+    default IntSeq mapToInt(ToIntFunction<T> function) {
+        return p -> any(t -> p.test(function.applyAsInt(t)));
     }
 
     default ItrSeq<T> asIterable() {
@@ -523,6 +506,10 @@ public interface Seq<T> {
         return reduce(Reducer.join(sep, function));
     }
 
+    default <C extends Collection<T>> C collectBy(IntFunction<C> constructor) {
+        return reduce(constructor.apply(sizeOrDefault()), Collection::add);
+    }
+
     default T first() {
         return reduce(Reducer.first());
     }
@@ -541,6 +528,23 @@ public interface Seq<T> {
 
     default T reduce(BinaryOperator<T> binaryOperator) {
         return reduce(Reducer.fold(binaryOperator));
+    }
+
+    default <E> E reduce(Reducer<T, E> reducer) {
+        any(reducer);
+        return reducer.result();
+    }
+
+    default <E, V> E reduce(Reducer<T, V> reducer, Function<V, E> function) {
+        return function.apply(reduce(reducer));
+    }
+
+    default <E> E reduce(E des, BiConsumer<E, T> accumulator) {
+        any(t -> {
+            accumulator.accept(des, t);
+            return false;
+        });
+        return des;
     }
 
     default T[] toObjArray(IntFunction<T[]> initializer) {

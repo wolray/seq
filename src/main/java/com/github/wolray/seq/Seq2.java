@@ -37,19 +37,6 @@ public interface Seq2<K, V> {
         });
     }
 
-    default <E> E reduce(E des, Consumer3<E, K, V> accumulator) {
-        any((k, v) -> {
-            accumulator.accept(des, k, v);
-            return false;
-        });
-        return des;
-    }
-
-    default <M extends Map<K, V>> M collectBy(M des) {
-        consume(des::put);
-        return des;
-    }
-
     default Pair<K, V> maxByKey(Comparator<K> comparator) {
         return reduce(new Pair<>(null, null), (p, k, v) -> {
             if (p.first == null || comparator.compare(p.first, k) < 0) {
@@ -165,12 +152,25 @@ public interface Seq2<K, V> {
     }
 
     default SeqMap<K, V> toMap() {
-        return collectBy(new SeqMap<>());
+        return collect(new SeqMap<>());
     }
 
     default <A, B> SeqMap<A, B> toMap(Consumer3<SeqMap<A, B>, K, V> consumer) {
         SeqMap<A, B> res = new SeqMap<>();
         consume((k, v) -> consumer.accept(res, k, v));
         return res;
+    }
+
+    default <M extends Map<K, V>> M collect(M des) {
+        consume(des::put);
+        return des;
+    }
+
+    default <E> E reduce(E des, Consumer3<E, K, V> accumulator) {
+        any((k, v) -> {
+            accumulator.accept(des, k, v);
+            return false;
+        });
+        return des;
     }
 }

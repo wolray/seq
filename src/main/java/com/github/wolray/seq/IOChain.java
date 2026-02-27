@@ -9,14 +9,6 @@ import java.io.*;
 public interface IOChain<T> {
     T call() throws IOException;
 
-    static <T, E> E apply(T t, Function<T, E> function) {
-        try {
-            return function.apply(t);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
     static <T> IOChain<T> of(IOChain<T> supplier) {
         return supplier;
     }
@@ -44,6 +36,14 @@ public interface IOChain<T> {
             Writer writer = supplier.call();
             return writer instanceof BufferedWriter ? (BufferedWriter)writer : new BufferedWriter(writer);
         };
+    }
+
+    static <T, E> E apply(T t, Function<T, E> function) {
+        try {
+            return function.apply(t);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     default void use(Consumer<T> consumer) {

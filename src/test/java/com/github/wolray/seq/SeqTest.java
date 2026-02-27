@@ -50,13 +50,13 @@ public class SeqTest {
         assertTo(ItrSeq.repeat(5, 1), "1,1,1,1,1");
         assertTo(ItrSeq.of(1, 1, 1, 2, 2).distinct(), "1,2");
 
-        assertTo(ItrSeq.range(4), "0,1,2,3");
-        assertTo(ItrSeq.range(1, 4), "1,2,3");
+        assertTo(IntSeq.range(4).boxed(), "0,1,2,3");
+        assertTo(IntSeq.range(1, 4).boxed(), "1,2,3");
     }
 
     @Test
     public void testAverage() {
-        Seq<Integer> seq = ItrSeq.range(10);
+        Seq<Integer> seq = IntSeq.range(10).boxed();
         assert seq.average((f, t) -> f.accept(t, 1)) == 4.5;
         assert seq.average((f, t) -> f.accept(t, t)) == 19.0 / 3;
     }
@@ -110,7 +110,7 @@ public class SeqTest {
         Seq<Integer> seq = Seq.of(0, 2, 4, 1, 6, 3, 5, 7, 10, 11, 12);
         assert seq.groupBy(i -> i / 4).toString().equals("{0=[0, 2, 1, 3], 1=[4, 6, 5, 7], 2=[10, 11], 3=[12]}");
         assert seq.groupBy(i -> i / 4, () -> Reducer.first(i -> i % 4 == 0)).toString().equals("{0=0, 1=4, 2=null, 3=12}");
-        assert seq.groupBy(i -> i / 4, () -> Reducer.sumInt()).toString().equals("{0=6, 1=22, 2=21, 3=12}");
+        assert seq.groupBy(i -> i / 4, () -> Reducer.sumInt(i -> i)).toString().equals("{0=6, 1=22, 2=21, 3=12}");
         assert seq.groupBy(i -> i / 4, () -> Reducer.first()).toString().equals("{0=0, 1=4, 2=10, 3=12}");
         assert seq.groupBy(i -> i / 4, () -> Reducer.ofStaged(Downstream.chunked(2))).toString().equals("{0=[[0, 2], [1, 3]], 1=[[4, 6], [5, 7]], 2=[[10, 11]], 3=[[12]]}");
     }

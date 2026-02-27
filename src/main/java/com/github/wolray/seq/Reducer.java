@@ -29,12 +29,12 @@ public interface Reducer<T, V> extends Predicate<T> {
         return collect(new AverageFolder(), consumer, AverageFolder::result);
     }
 
-    static <T, C extends Collection<T>> Reducer<T, C> collect(C des) {
-        return of(des, Collection::add);
-    }
-
     static <T, V, E> Reducer<T, E> collect(Collector<T, V, E> collector) {
         return collect(collector.supplier().get(), collector.accumulator(), collector.finisher());
+    }
+
+    static <T, C extends Collection<T>> Reducer<T, C> collect(C des) {
+        return of(des, Collection::add);
     }
 
     static <T, V, E> Reducer<T, E> collect(V des, BiConsumer<V, T> accumulator, Function<V, E> finisher) {
@@ -603,22 +603,6 @@ public interface Reducer<T, V> extends Predicate<T> {
         return sort(Comparator.comparing(function).reversed());
     }
 
-    static Reducer<Double, Double> sum() {
-        return new SimpleReducer<Double, Double>() {
-            double s = 0;
-
-            @Override
-            protected void accept(Double t) {
-                s += t;
-            }
-
-            @Override
-            public Double result() {
-                return s;
-            }
-        };
-    }
-
     static <T> Reducer<T, Double> sum(ToDoubleFunction<T> function) {
         return new SimpleReducer<T, Double>() {
             double s = 0;
@@ -635,22 +619,6 @@ public interface Reducer<T, V> extends Predicate<T> {
         };
     }
 
-    static Reducer<Integer, Integer> sumInt() {
-        return new SimpleReducer<Integer, Integer>() {
-            int s = 0;
-
-            @Override
-            protected void accept(Integer t) {
-                s += t;
-            }
-
-            @Override
-            public Integer result() {
-                return s;
-            }
-        };
-    }
-
     static <T> Reducer<T, Integer> sumInt(ToIntFunction<T> function) {
         return new SimpleReducer<T, Integer>() {
             int s = 0;
@@ -662,22 +630,6 @@ public interface Reducer<T, V> extends Predicate<T> {
 
             @Override
             public Integer result() {
-                return s;
-            }
-        };
-    }
-
-    static Reducer<Long, Long> sumLong() {
-        return new SimpleReducer<Long, Long>() {
-            long s = 0;
-
-            @Override
-            protected void accept(Long t) {
-                s += t;
-            }
-
-            @Override
-            public Long result() {
                 return s;
             }
         };
