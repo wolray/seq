@@ -348,9 +348,7 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
                     queue.offer(new IntPair<>(0, factory.get()));
                 }
                 for (IntPair<Reducer<T, V>> sub : queue) {
-                    if (sub.it.test(t)) {
-                        break;
-                    }
+                    sub.it.test(t);
                     sub.intVal++;
                 }
                 IntPair<Reducer<T, V>> first = queue.peek();

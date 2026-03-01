@@ -98,6 +98,7 @@ public class SeqTest {
         assertTo(seq.chunked(5).map(function), "|", "0,2,4,1,6|3,5,7,10,11|12");
         assertTo(seq.windowed(5, 3, true, Reducer::toList).map(function), "|", "0,2,4,1,6|1,6,3,5,7|5,7,10,11,12|11,12");
         assertTo(seq.windowed(5, 3, false, Reducer::toList).map(function), "|", "0,2,4,1,6|1,6,3,5,7|5,7,10,11,12");
+        assertTo(seq.windowed(5, 3, true, () -> Reducer.of(Downstream.take(2))).map(function), "|", "0,2|1,6|5,7|11,12");
         assertTo(Seq.of(1, 2, 3, 4).chunked(2).map(function), "|", "1,2|3,4");
         Seq<Integer> empty = Seq.empty();
         Seq<SeqList<Integer>> chunked = empty.chunked(2);
