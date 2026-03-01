@@ -182,7 +182,7 @@ public interface Seq<T> {
     }
 
     default <V> Seq<V> chunked(int size, Supplier<Reducer<T, V>> factory) {
-        return downstream(Downstream.chunked(size, factory));
+        return toStaged(Downstream.chunked(size, factory));
     }
 
     default Seq<T> distinct() {
@@ -195,13 +195,6 @@ public interface Seq<T> {
 
     default <E> Seq<E> downstream(Downstream<T, E> downstream) {
         return p -> any(downstream.apply(p));
-    }
-
-    default <E> Seq<E> downstream(Downstream.Staged<T, E> downstream) {
-        return p -> {
-            Downstream.StagedPredicate<T> origin = downstream.apply(p);
-            return any(origin) || origin.after();
-        };
     }
 
     default Seq<T> drop(int n) {
@@ -339,12 +332,19 @@ public interface Seq<T> {
         return millis <= 0 ? this : downstream(Downstream.timeLimit(millis));
     }
 
+    default <E> Seq<E> toStaged(Downstream.Staged<T, E> downstream) {
+        return p -> {
+            Downstream.StagedPredicate<T> origin = downstream.apply(p);
+            return any(origin) || origin.after();
+        };
+    }
+
     default Seq<T> union(Iterable<T> iterable) {
-        return downstream(Downstream.union(iterable));
+        return toStaged(Downstream.union(iterable));
     }
 
     default Seq<T> union(T t) {
-        return downstream(Downstream.union(t));
+        return toStaged(Downstream.union(t));
     }
 
     @SuppressWarnings("unchecked")
@@ -357,7 +357,7 @@ public interface Seq<T> {
     }
 
     default <V> Seq<V> windowed(int size, int step, boolean allowPartial, Supplier<Reducer<T, V>> factory) {
-        return downstream(Downstream.windowed(size, step, allowPartial, factory));
+        return toStaged(Downstream.windowed(size, step, allowPartial, factory));
     }
 
     default <V> Seq<V> windowedByTime(long timeMillis, Supplier<Reducer<T, V>> factory) {
