@@ -558,11 +558,7 @@ public interface Seq<T> {
         return !any(predicate.negate());
     }
 
-    default boolean none(Predicate<T> predicate) {
-        return !any(predicate);
-    }
-
-    default boolean untilIndexed(IntObjPredicate<T> predicate) {
+    default boolean anyIndexed(IntObjPredicate<T> predicate) {
         return any(new Predicate<T>() {
             int index = 0;
 
@@ -571,6 +567,10 @@ public interface Seq<T> {
                 return predicate.test(index++, t);
             }
         });
+    }
+
+    default boolean none(Predicate<T> predicate) {
+        return !any(predicate);
     }
 
     default boolean[] toBooleanArray(Predicate<T> function) {

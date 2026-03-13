@@ -8,7 +8,7 @@ public interface IntSeq {
 
     static IntSeq of(CharSequence cs) {
         return p -> {
-            for (int i = 0; i < cs.length(); i++) {
+            for (int i = 0, len = cs.length(); i < len; i++) {
                 if (p.test(cs.charAt(i))) {
                     return true;
                 }
