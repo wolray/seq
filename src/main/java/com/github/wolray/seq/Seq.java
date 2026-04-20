@@ -280,6 +280,10 @@ public interface Seq<T> {
         return downstream(Downstream.mapIndexed(function));
     }
 
+    default <E> Seq<E> mapNotNull(Function<T, E> function) {
+        return downstream(Downstream.mapNotNull(function));
+    }
+
     default Seq<String> mapStr() {
         return downstream(Downstream.map(Objects::toString));
     }

@@ -127,6 +127,13 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
         };
     }
 
+    static <T, E> Downstream<T, E> mapNotNull(Function<T, E> function) {
+        return p -> t -> {
+            E e = function.apply(t);
+            return e != null && p.test(e);
+        };
+    }
+
     static <T> Downstream<T, T> onEach(Consumer<T> consumer) {
         return p -> t -> {
             consumer.accept(t);
