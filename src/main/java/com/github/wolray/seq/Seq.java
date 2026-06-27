@@ -339,7 +339,7 @@ public interface Seq<T> {
     default <E> Seq<E> toStaged(Downstream.Staged<T, E> downstream) {
         return p -> {
             Downstream.StagedPredicate<T> origin = downstream.apply(p);
-            return any(origin) || origin.after();
+            return any(origin) | origin.after();
         };
     }
 
