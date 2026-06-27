@@ -344,11 +344,21 @@ public interface Seq<T> {
     }
 
     default Seq<T> union(Iterable<T> iterable) {
-        return toStaged(Downstream.union(iterable));
+        return p -> {
+            if (any(p)) {
+                return true;
+            }
+            for (T t : iterable) {
+                if (p.test(t)) {
+                    return true;
+                }
+            }
+            return false;
+        };
     }
 
     default Seq<T> union(T t) {
-        return toStaged(Downstream.union(t));
+        return p -> any(p) || p.test(t);
     }
 
     @SuppressWarnings("unchecked")
@@ -365,7 +375,7 @@ public interface Seq<T> {
     }
 
     default <V> Seq<V> windowedByTime(long timeMillis, Supplier<Reducer<T, V>> factory) {
-        return downstream(Downstream.windowedByTime(timeMillis, factory));
+        return toStaged(Downstream.windowedByTime(timeMillis, factory));
     }
 
     default Seq<IntPair<T>> withInt(ToIntFunction<T> function) {

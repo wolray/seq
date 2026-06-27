@@ -235,29 +235,6 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
         };
     }
 
-    static <T, V> Downstream<T, V> windowedByTime(long timeMillis, Supplier<Reducer<T, V>> factory) {
-        if (timeMillis <= 0) {
-            throw new IllegalArgumentException("non-positive time");
-        }
-        return p -> new Predicate<T>() {
-            long last = System.currentTimeMillis();
-            Reducer<T, V> reducer = factory.get();
-
-            @Override
-            public boolean test(T t) {
-                long now = System.currentTimeMillis();
-                if (now - last > timeMillis) {
-                    last = now;
-                    if (p.test(reducer.result())) {
-                        return true;
-                    }
-                    reducer = factory.get();
-                }
-                return reducer.test(t);
-            }
-        };
-    }
-
     static <T> Downstream<T, IntPair<T>> withIndex() {
         return p -> new Predicate<T>() {
             int i = 0;
@@ -284,12 +261,14 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
         return p -> new StagedPredicate<T>() {
             Reducer<T, V> reducer = factory.get();
             int idx = 0;
+            boolean stopped;
 
             @Override
             public boolean test(T t) {
                 if (idx == size) {
                     if (p.test(reducer.result())) {
                         reducer = null;
+                        stopped = true;
                         return true;
                     }
                     reducer = factory.get();
@@ -302,40 +281,10 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
 
             @Override
             public boolean after() {
-                return reducer != null && p.test(reducer.result());
-            }
-        };
-    }
-
-    static <T> Staged<T, T> union(Iterable<T> iterable) {
-        return p -> new StagedPredicate<T>() {
-            @Override
-            public boolean test(T t) {
-                return p.test(t);
-            }
-
-            @Override
-            public boolean after() {
-                for (T t : iterable) {
-                    if (p.test(t)) {
-                        return true;
-                    }
+                if (stopped || reducer == null) {
+                    return stopped;
                 }
-                return false;
-            }
-        };
-    }
-
-    static <T> Staged<T, T> union(T t) {
-        return p -> new StagedPredicate<T>() {
-            @Override
-            public boolean test(T t) {
-                return p.test(t);
-            }
-
-            @Override
-            public boolean after() {
-                return p.test(t);
+                return stopped = p.test(reducer.result());
             }
         };
     }
@@ -347,6 +296,7 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
         return p -> new StagedPredicate<T>() {
             final Queue<IntPair<Reducer<T, V>>> queue = new LinkedList<>();
             int i = 0;
+            boolean stopped;
 
             @Override
             public boolean test(T t) {
@@ -362,6 +312,7 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
                 if (first != null && first.intVal == size) {
                     queue.poll();
                     if (p.test(first.it.result())) {
+                        stopped = true;
                         return true;
                     }
                 }
@@ -371,16 +322,54 @@ public interface Downstream<T, E> extends Function<Predicate<E>, Predicate<T>> {
 
             @Override
             public boolean after() {
+                if (stopped) {
+                    return true;
+                }
                 if (allowPartial) {
                     while (!queue.isEmpty()) {
                         if (p.test(queue.poll().it.result())) {
                             queue.clear();
+                            stopped = true;
                             return true;
                         }
                     }
                     return false;
                 }
                 return false;
+            }
+        };
+    }
+
+    static <T, V> Staged<T, V> windowedByTime(long timeMillis, Supplier<Reducer<T, V>> factory) {
+        if (timeMillis <= 0) {
+            throw new IllegalArgumentException("non-positive time");
+        }
+        return p -> new StagedPredicate<T>() {
+            long last = System.currentTimeMillis();
+            Reducer<T, V> reducer = factory.get();
+            boolean stopped;
+
+            @Override
+            public boolean test(T t) {
+                long now = System.currentTimeMillis();
+                if (now - last > timeMillis) {
+                    last = now;
+                    if (p.test(reducer.result())) {
+                        reducer = null;
+                        stopped = true;
+                        return true;
+                    }
+                    reducer = factory.get();
+                }
+                return reducer.test(t);
+            }
+
+            @Override
+            public boolean after() {
+                if (stopped || reducer == null) {
+                    return stopped;
+                }
+                return stopped = p.test(reducer.result());
             }
         };
     }

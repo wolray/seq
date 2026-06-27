@@ -1,14 +1,14 @@
 # seq
 
-`seq` 是一个面向 Java 的轻量级流式编程 API。它用函数式接口表达数据流，让普通 Java 代码可以写出类似生成器的生产逻辑，同时支持 `map`、`filter`、`flatMap`、`take`、`drop`、`chunked`、`windowed`、`groupBy`、`reduce` 等常见流处理操作。
+`seq` 是一个面向 Java 的轻量级流式编程 API。它用一个函数式接口表达数据流，让普通循环、递归遍历、回调式 API 或临时生成逻辑都可以直接包装成类似生成器的 `Seq`，并继续使用 `map`、`filter`、`flatMap`、`take`、`chunked`、`windowed`、`groupBy`、`reduce` 等流处理操作。
 
-`seq` 的设计精妙之处在于，它把流抽象压缩到了一个极小、但表达力很强的协议上：数据源只需要知道如何把元素交给下游，下游只需要用一个布尔返回值告诉上游是否应该停止。这个协议足够简单，简单到任何循环、递归遍历、回调式 API 或临时生成逻辑都可以直接包装成 `Seq`；同时它又足够完整，可以自然承载惰性计算、中间转换、短路终止、状态化下游和终端归约。
+它的核心协议很小：生产者把元素交给下游，下游用一个布尔返回值告诉生产者是否停止。这个模型和 Go 1.23 的 `range func` 相似，都是由生成函数主动调用 `yield`/`predicate`，再把停止信号沿调用栈传回上游。不同的是，Go 的 `yield` 返回 `false` 表示停止，手写时常要写 `if !yield(value) { return }`；`seq` 沿用 Java `Predicate` 和 `any` 的语义，返回 `true` 表示“条件已满足，应当停止”，因此可以和 `any`、`find`、`take`、`Reducer.done()` 等短路逻辑自然组合。
 
-相比 `java.util.stream.Stream`，`seq` 更适合描述“边生产、边消费、随时停止”的流程。`Stream` 通常以迭代器或 spliterator 为核心，由终端操作主动拉取元素；`seq` 则让生产者主动推送元素，并把停止信号沿调用栈即时传回生产者。因此，手写生成器、多层循环、树遍历、正则匹配、分页读取、分块窗口等场景不需要额外维护迭代器状态，也不必为了适配拉取模型拆分复杂控制流。
+相比 `java.util.stream.Stream` 的拉取式 `Iterator`/`Spliterator` 模型，`seq` 更适合描述“边生产、边消费、随时停止”的流程。多层循环、树遍历、正则匹配、分页读取、分块窗口等场景不需要额外维护迭代器状态，也不必为了适配拉取模型拆分原本直接的控制流。
 
-这种推送式模型还带来了一个独特优势：中间操作和下游协议可以保持高度统一。`map`、`filter`、`flatMap` 只是把一个 predicate 包装成另一个 predicate；`chunked`、`windowed` 这类需要收尾的操作可以通过 staged downstream 明确表达生命周期；`Reducer` 也可以复用同一套转换逻辑。最终得到的是一个 API 面很小、组合能力很强的流处理工具，既保留 Java 代码的直接性，又获得接近生成器和协程风格的表达能力。
+在这个协议之上，`seq` 把中间转换、终端归约和 staged 收尾统一起来：`map`、`filter`、`flatMap` 只是包装 predicate，`Reducer` 可以复用同一套转换逻辑，`chunked`、`windowed` 这类需要收尾的操作也能明确表达生命周期。最终得到的是一个 API 面很小、组合能力很强的流处理工具。
 
-项目的核心不是基于 `java.util.stream.Stream` 的拉取式模型，而是一个更直接的推送式模型：
+核心接口定义如下：
 
 ```java
 @FunctionalInterface
@@ -27,7 +27,7 @@ public interface Seq<T> {
 <dependency>
     <groupId>io.github.wolray</groupId>
     <artifactId>seq</artifactId>
-    <version>2.2.1</version>
+    <version>2.2.2</version>
 </dependency>
 ```
 
@@ -250,11 +250,21 @@ seq.joinTask();
 
 ## 发布记录
 
+### 2.2.2
+
+修复 `windowedByTime(...)` 在源流结束时丢失最后一个时间窗口的问题。该操作现在使用 staged downstream，在遍历结束后会补发当前未输出的时间窗口。
+
+修复 `union(t)` 和 `union(iterable)` 在上游已经短路停止后仍继续追加元素的问题，确保停止信号不会被追加逻辑覆盖。
+
+修复 `chunked(...)`、`windowed(...)` 和 `windowedByTime(...)` 这类 staged downstream 在下游已经停止后仍可能通过 `after()` 再次输出收尾结果的问题。
+
+当前源码版本。Maven 坐标为 `io.github.wolray:seq:2.2.2`。
+
 ### 2.2.1
 
 修复 `Seq.toStaged(...)` 的收尾行为。此前 staged downstream 在上游提前短路时可能跳过 `after()`，导致 `take(...).chunked(...)` 这类组合无法补发最后一个未满批次；本版本确保无论上游是否短路，都会执行 staged 收尾逻辑。
 
-当前源码版本。Maven 坐标为 `io.github.wolray:seq:2.2.1`。
+Maven 坐标为 `io.github.wolray:seq:2.2.1`。
 
 ### 2.2.0
 

@@ -186,7 +186,6 @@ public class SeqTest {
         assertTo(seq.duplicateEach(2), "1,1,2,2,3,3,4,4");
         assertTo(seq.duplicateAll(2), "1,2,3,4,1,2,3,4");
         assertTo(seq.union(5), "1,2,3,4,5");
-        assertTo(seq.toStaged(Downstream.union(5)), "1,2,3,4,5");
     }
 
     @Test
